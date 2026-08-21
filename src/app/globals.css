@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* ============================================
+   BQD MATH — DESIGN TOKENS
+   Đổi màu/font ở đây, toàn bộ app tự cập nhật.
+   Dùng: bg-navy-500, text-pastel-100, border-navy-300 ...
+   ============================================ */
+:root {
+  /* Navy — dùng cho chữ, border đậm, trạng thái active */
+  --color-navy-50: #e8edf5;
+  --color-navy-100: #c5d0e6;
+  --color-navy-200: #8fa1cd;
+  --color-navy-300: #5972b4;
+  --color-navy-400: #2e4a8a;
+  --color-navy-500: #1b2a4a; /* màu chữ chính */
+  --color-navy-600: #162240;
+  --color-navy-700: #111a33;
+  --color-navy-800: #0c1226;
+  --color-navy-900: #070a19;
+
+  /* Pastel blue — dùng cho nền, card, hover nhẹ */
+  --color-pastel-50: #f5fafe;
+  --color-pastel-100: #e8f4fd; /* màu nền chính */
+  --color-pastel-200: #d1e9fb;
+  --color-pastel-300: #b0d9f7;
+  --color-pastel-400: #8fc9f3;
+  --color-pastel-500: #6eb9ef;
+  --color-pastel-600: #4da9eb;
+}
+
+@theme inline {
+  --color-navy-50: var(--color-navy-50);
+  --color-navy-100: var(--color-navy-100);
+  --color-navy-200: var(--color-navy-200);
+  --color-navy-300: var(--color-navy-300);
+  --color-navy-400: var(--color-navy-400);
+  --color-navy-500: var(--color-navy-500);
+  --color-navy-600: var(--color-navy-600);
+  --color-navy-700: var(--color-navy-700);
+  --color-navy-800: var(--color-navy-800);
+  --color-navy-900: var(--color-navy-900);
+
+  --color-pastel-50: var(--color-pastel-50);
+  --color-pastel-100: var(--color-pastel-100);
+  --color-pastel-200: var(--color-pastel-200);
+  --color-pastel-300: var(--color-pastel-300);
+  --color-pastel-400: var(--color-pastel-400);
+  --color-pastel-500: var(--color-pastel-500);
+  --color-pastel-600: var(--color-pastel-600);
+
+  --font-sans: var(--font-comfortaa), cursive;
+}
+
+body {
+  font-family: var(--font-sans);
+}
