@@ -1,27 +1,22 @@
 import type { Metadata } from "next";
-import { Comfortaa } from "next/font/google";
-import "./globals.css";
 
-const comfortaa = Comfortaa({
-  variable: "--font-comfortaa",
-  subsets: ["latin", "vietnamese"],
-  weight: ["300", "400", "500", "600", "700"],
-});
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
 
 export const metadata: Metadata = {
-  title: "BQD Math | Ôn luyện & Thi thử Toán",
-  description:
-    "Hệ thống ôn luyện và thi thử Toán học — đề thi, câu hỏi ôn tập theo chương, phòng thi thử có chấm điểm.",
+  title: "Quản trị | BQD Math",
 };
 
-export default function RootLayout({
+// Khung cho toàn bộ /admin/** — sidebar dashboard thay cho Navbar ngang.
+// KHÔNG khai báo lại <html>/<body>/font ở đây: layout gốc app/layout.tsx đã
+// lo phần đó, layout lồng nhau chỉ bọc thêm phần khung riêng của nhóm route.
+// TODO: chặn truy cập nếu session không phải role ADMIN (xem features/auth).
+export default function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi" className={`${comfortaa.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col bg-pastel-100 text-navy-500 font-sans">
-        {children}
-      </body>
-    </html>
+    <div className="flex flex-1">
+      <AdminSidebar />
+      <main className="flex-1 px-6 py-8">{children}</main>
+    </div>
   );
 }

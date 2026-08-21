@@ -1,15 +1,14 @@
-// Trang chủ — hiện lịch dạy của giáo viên (lớp cơ bản + nâng cao).
-// Dữ liệu lịch dạy: TODO lấy từ prisma.teachingSchedule.findMany()
+import { HeroSection } from "@/features/home/components/HeroSection";
+import { ScheduleSection } from "@/features/home/components/ScheduleSection";
+
+// Trang chủ — câu truyền cảm hứng + lịch dạy của giáo viên (lớp cơ bản + nâng cao).
+// Theo ARCHITECTURE.md: file này chỉ ráp route, toàn bộ UI/dữ liệu nằm ở features/home.
+// TODO: khi có dữ liệu thật, fetch ở đây (features/home/queries.ts) rồi truyền xuống ScheduleSection.
 export default function HomePage() {
   return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold text-navy-600">
-        Lịch dạy của giáo viên
-      </h1>
-      <p className="text-navy-400">
-        {/* TODO: render TeachingCalendar (features/classes/components) */}
-        Lịch lớp Cơ bản & Nâng cao sẽ hiển thị ở đây.
-      </p>
-    </section>
+    <>
+      <HeroSection />
+      <ScheduleSection />
+    </>
   );
 }
