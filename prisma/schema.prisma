@@ -1,0 +1,261 @@
+// ============================================================
+// BQD MATH — DATABASE SCHEMA
+// Chạy `npx prisma migrate dev` sau khi có DATABASE_URL trong .env
+// Xem README.md gốc phần "Bước tiếp theo" để biết cách chạy.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // KHÔNG khai báo url/directUrl ở đây — Prisma 7 chuyển việc này sang
+  // prisma.config.ts (cho Prisma CLI) và driver adapter trong lib/db.ts
+  // (cho app lúc chạy). Xem 2 file đó + README mục "Vì sao có prisma.config.ts".
+}
+
+// ---------------- TÀI KHOẢN ----------------
+
+enum Role {
+  ADMIN // giáo viên — toàn quyền
+  STUDENT
+  GUEST
+}
+
+model User {
+  id          String  @id @default(cuid())
+  role        Role    @default(STUDENT)
+  name        String
+  email       String? @unique
+
+  // CHỈ lưu hash 1 chiều (bcrypt) — KHÔNG BAO GIỜ lưu mật khẩu dạng đọc/giải
+  // mã ngược được, kể cả để admin "xem lại". Admin cần hỗ trợ HS quên mật
+  // khẩu thì dùng chức năng RESET (sinh mật khẩu tạm mới), không phải xem
+  // lại mật khẩu cũ. Xem lib/password.ts và SECURITY.md.
+  passwordHash String
+
+  // Đánh dấu mật khẩu vừa được admin reset — bắt buộc HS đổi mật khẩu ở
+  // lần đăng nhập tiếp theo thay vì tiếp tục dùng mật khẩu tạm admin biết.
+  mustChangePassword Boolean @default(false)
+
+  parentPhone String? // SĐT phụ huynh — dùng gửi SMS
+  emailOptIn  Boolean @default(false) // đăng ký nhận email khi có đề mới
+
+  classesTaught   Class[] // các lớp GV này đang dạy (role = ADMIN)
+  classes         ClassStudent[] // các lớp HS này tham gia (role = STUDENT)
+  examAttempts    ExamAttempt[]
+  reviewAttempts  ReviewAttempt[]
+  notifications   Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------- LỚP HỌC ----------------
+
+model Class {
+  id        String   @id @default(cuid())
+  name      String
+  teacherId String
+  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  students  ClassStudent[]
+  documents Document[]
+  exams     Exam[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Bảng trung gian nhiều-nhiều User <-> Class
+model ClassStudent {
+  id      String @id @default(cuid())
+  classId String
+  userId  String
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([classId, userId])
+}
+
+// ---------------- TÀI LIỆU ----------------
+
+model Folder {
+  id       String   @id @default(cuid())
+  name     String
+  parentId String?
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderTree")
+
+  documents Document[]
+
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  title       String
+  fileUrl     String
+  answerUrl   String? // file lời giải — optional
+  showAnswer  Boolean  @default(false) // GV quyết định hiện lời giải cho HS
+
+  allowDownload Boolean @default(false)
+
+  classId  String?
+  class    Class?  @relation(fields: [classId], references: [id])
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id])
+
+  // "Cập nhật lần thứ X" — KHÔNG dùng để sort danh sách (chỉ hiển thị ghi chú).
+  // Danh sách trong lớp sort theo createdAt.
+  updateCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------- ĐỀ THI ----------------
+
+model Exam {
+  id        String  @id @default(cuid())
+  title     String
+  classId   String?
+  class     Class?  @relation(fields: [classId], references: [id])
+
+  examFileUrl   String // luôn hiện với HS
+  answerFileUrl String? // GV quyết định có hiện hay không
+  showAnswer    Boolean @default(false)
+
+  // Cấu hình giao đề (giống Azota)
+  isForever     Boolean   @default(true)
+  availableFrom DateTime?
+  availableTo   DateTime?
+
+  durationMinutes   Int? // null nếu là đề luyện tập không giới hạn giờ
+  allowDownload     Boolean @default(false)
+  hideWrongAnswers  Boolean @default(false) // ẩn đáp án đúng cho câu trả lời sai
+
+  // Cấu trúc phiếu tô: mảng JSON mô tả số câu mỗi phần, vd:
+  // [{ "part": 1, "questions": 40, "type": "multiple_choice" }, ...]
+  answerSheetConfig Json?
+
+  attempts ExamAttempt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ExamMode {
+  MOCK // thi thử — có đếm giờ
+  PRACTICE // luyện tập — không đếm giờ
+}
+
+model ExamAttempt {
+  id     String   @id @default(cuid())
+  examId String
+  userId String
+  exam   Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode   ExamMode
+
+  score       Float?
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+
+  answers        AnswerHistory[]
+
+  @@index([examId, userId])
+}
+
+// Lưu MỌI lần đổi đáp án — không ghi đè, để hiển thị lịch sử đầy đủ.
+// Sort khi hiển thị: theo questionNumber -> changedAt.
+model AnswerHistory {
+  id              String      @id @default(cuid())
+  attemptId       String
+  attempt         ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionNumber  Int
+  selectedAnswer  String
+  changedAt       DateTime    @default(now())
+
+  @@index([attemptId, questionNumber])
+}
+
+// ---------------- CÂU HỎI ÔN TẬP ----------------
+
+model Chapter {
+  id    String @id @default(cuid())
+  name  String
+  order Int    @default(0)
+
+  questions ReviewQuestion[]
+}
+
+model ReviewQuestion {
+  id        String  @id @default(cuid())
+  chapterId String
+  chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  content String
+  options Json // ["A. ...", "B. ...", "C. ...", "D. ..."]
+  correctAnswer String
+
+  textSolution String?
+  videoUrl     String? // null -> hiện "GV chưa làm video"
+
+  attempts ReviewAttempt[]
+
+  createdAt DateTime @default(now())
+}
+
+model ReviewAttempt {
+  id             String         @id @default(cuid())
+  questionId     String
+  userId         String
+  question       ReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  selectedAnswer String
+  isCorrect      Boolean
+  attemptedAt    DateTime       @default(now())
+}
+
+// ---------------- LỊCH DẠY & THÔNG BÁO ----------------
+
+enum ClassLevel {
+  BASIC
+  ADVANCED
+}
+
+model TeachingSchedule {
+  id        String     @id @default(cuid())
+  className String
+  dayOfWeek Int // 0 = CN ... 6 = Thứ 7
+  startTime String // "18:00"
+  endTime   String // "20:00"
+  level     ClassLevel
+}
+
+enum NotificationType {
+  EMAIL
+  SMS
+}
+
+model Notification {
+  id      String            @id @default(cuid())
+  userId  String
+  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type    NotificationType
+  content String
+  sentAt  DateTime          @default(now())
+}
+
+model ContactInfo {
+  id          String @id @default(cuid())
+  address     String
+  mapUrl      String
+  facebookUrl String?
+  phone       String?
+  zaloUrl     String?
+}
