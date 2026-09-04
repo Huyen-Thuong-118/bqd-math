@@ -2,8 +2,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
 // Route group (student): Lớp học, Ôn tập, Thi thử, Tài liệu.
-// TODO: bọc thêm auth check ở đây (redirect /login nếu chưa đăng nhập)
-// khi features/auth có session helper — xem lib/auth.ts.
+// Auth check (chưa đăng nhập / PENDING / SUSPENDED) đã chặn ở src/proxy.ts
+// trước khi request tới được layout này — xem matcher trong file đó.
 export default function StudentLayout({
   children,
 }: {
