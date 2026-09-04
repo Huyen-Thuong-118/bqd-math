@@ -10,7 +10,7 @@ tập theo chương, phòng thi thử có chấm điểm.
 - **Next.js 16** (App Router, TypeScript, Turbopack)
 - **Tailwind CSS v4** — theme màu Navy/Pastel, cấu hình bằng CSS (`src/app/globals.css`)
 - **Prisma + PostgreSQL** — database
-- **NextAuth (Auth.js)** — đăng nhập, phân quyền Admin/Student/Guest _(chưa cài — xem "Bước tiếp theo")_
+- **NextAuth (Auth.js v5)** — đăng nhập Credentials + Google, phân quyền Admin/Student (`src/auth.ts`)
 - Font: **Comfortaa**
 
 ## Cấu trúc thư mục
@@ -102,7 +102,7 @@ Mở [http://localhost:3000](http://localhost:3000).
 - [x] Cơ chế batch-save đáp án chống nghẽn DB (`features/exams/hooks/useAnswerBuffer.ts`)
 - [x] Mật khẩu hash 1 chiều, admin không xem lại được (`lib/password.ts`) — xem `SECURITY.md`
 - [ ] **Ưu tiên cao:** thêm session check vào API route lưu đáp án (đang mở, ai biết attemptId cũng ghi được — xem SECURITY.md mục 3)
-- [ ] Cài & cấu hình NextAuth trong `lib/auth.ts`
+- [x] Cài & cấu hình NextAuth trong `src/auth.ts` — Credentials + Google, session JWT, gate route ở `src/proxy.ts`
 - [ ] Chạy `npx shadcn@latest init` để thêm UI components vào `components/ui/`
 - [ ] `PdfViewer.tsx` — render PDF qua signed URL, có watermark tên HS
 - [ ] `AnswerSheet.tsx` + `ExamTimer.tsx` — ghép UI thật vào `useAnswerBuffer`
