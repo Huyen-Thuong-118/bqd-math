@@ -26,6 +26,22 @@
   --color-pastel-400: #8fc9f3;
   --color-pastel-500: #6eb9ef;
   --color-pastel-600: #4da9eb;
+
+  /* Galaxy — nền tối riêng cho Footer, tạo tương phản với thân trang sáng.
+     Ramp RIÊNG chứ không nhập vào navy: navy-900 (#070a19) còn tối hơn
+     galaxy-900 nên nhét vào đó sẽ làm hỏng thứ tự đậm–nhạt của ramp navy. */
+  --color-galaxy-900: #0b1330; /* điểm đầu gradient, gần như đen */
+  --color-galaxy-800: #131c3d; /* điểm cuối gradient */
+
+  /* Accent ấm — hiện chỉ dùng cho khối hộp nội tiếp ở hình minh hoạ Hero, để
+     nó tách hẳn khỏi nét navy của hình chóp. Cố ý là đất nung chứ không phải
+     đỏ thuần: đỏ gắt trên nền pastel sáng vừa chói vừa lạc tông cả trang. */
+  --color-accent-400: #f0a58c;
+  --color-accent-500: #d9694a;
+
+  /* Nền thanh điều hướng — xám-xanh rất nhạt, phẳng (không opacity/gradient).
+     Để ngoài ramp pastel vì đây là màu trung tính ngả xám, không cùng hệ. */
+  --color-nav: #f0f3fa;
 }
 
 @theme inline {
@@ -48,9 +64,71 @@
   --color-pastel-500: var(--color-pastel-500);
   --color-pastel-600: var(--color-pastel-600);
 
+  --color-galaxy-800: var(--color-galaxy-800);
+  --color-galaxy-900: var(--color-galaxy-900);
+
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+
+  --color-nav: var(--color-nav);
+
   --font-sans: var(--font-comfortaa), cursive;
+
+  /* Chỉ dùng cho câu quote ở Hero — phần còn lại của site vẫn Comfortaa */
+  --font-slogan: var(--font-noto-serif-display), serif;
+
+  /* Chuyển động nền cho khối minh hoạ "liquid glass" ở Trang chủ.
+     Dùng: animate-float, animate-float-slow, animate-drift */
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-drift: drift 16s ease-in-out infinite;
+}
+
+/* Biên độ nhỏ, chỉ đủ tạo cảm giác "nổi" — không gây mỏi mắt khi đọc */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+/* Blob nền: trôi chậm + phình nhẹ để nền không bị "chết".
+   Trôi sang TRÁI (X âm): transform có tính vào vùng cuộn, trôi sang phải sẽ
+   sinh thanh cuộn ngang khi blob nằm sát mép phải trên màn hình nhỏ. */
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-24px, -18px, 0) scale(1.06);
+  }
 }
 
 body {
   font-family: var(--font-sans);
+}
+
+/* Cho nút CTA "Xem lịch học" cuộn mượt xuống section lịch (href="#lich-giang-day") */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Tôn trọng cài đặt giảm chuyển động của hệ điều hành:
+   tắt toàn bộ hiệu ứng nổi/trôi/cuộn mượt thay vì chỉ giảm bớt. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
