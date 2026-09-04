@@ -1,11 +1,20 @@
 ﻿import type { Metadata } from "next";
-import { Comfortaa } from "next/font/google";
+import { Comfortaa, Noto_Serif_Display } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 const comfortaa = Comfortaa({
   variable: "--font-comfortaa",
   subsets: ["latin", "vietnamese"],
   weight: ["300", "400", "500", "600", "700"],
+});
+
+// Chỉ dùng cho câu quote ở Hero (xem --font-slogan trong globals.css).
+// Variable font nên không cần khai báo `weight`.
+const notoSerifDisplay = Noto_Serif_Display({
+  variable: "--font-noto-serif-display",
+  subsets: ["latin", "vietnamese"],
+  style: ["italic"],
 });
 
 export const metadata: Metadata = {
@@ -18,9 +27,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi" className={`${comfortaa.variable} h-full antialiased`}>
+    <html
+      lang="vi"
+      className={`${comfortaa.variable} ${notoSerifDisplay.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col bg-pastel-100 text-navy-500 font-sans">
-        {children}
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );
