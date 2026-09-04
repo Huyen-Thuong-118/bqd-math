@@ -26,6 +26,22 @@
   --color-pastel-400: #8fc9f3;
   --color-pastel-500: #6eb9ef;
   --color-pastel-600: #4da9eb;
+
+  /* Galaxy — nền tối riêng cho Footer, tạo tương phản với thân trang sáng.
+     Ramp RIÊNG chứ không nhập vào navy: navy-900 (#070a19) còn tối hơn
+     galaxy-900 nên nhét vào đó sẽ làm hỏng thứ tự đậm–nhạt của ramp navy. */
+  --color-galaxy-900: #0b1330; /* điểm đầu gradient, gần như đen */
+  --color-galaxy-800: #131c3d; /* điểm cuối gradient */
+
+  /* Accent ấm — hiện chỉ dùng cho khối hộp nội tiếp ở hình minh hoạ Hero, để
+     nó tách hẳn khỏi nét navy của hình chóp. Cố ý là đất nung chứ không phải
+     đỏ thuần: đỏ gắt trên nền pastel sáng vừa chói vừa lạc tông cả trang. */
+  --color-accent-400: #f0a58c;
+  --color-accent-500: #d9694a;
+
+  /* Nền thanh điều hướng — xám-xanh rất nhạt, phẳng (không opacity/gradient).
+     Để ngoài ramp pastel vì đây là màu trung tính ngả xám, không cùng hệ. */
+  --color-nav: #f0f3fa;
 }
 
 @theme inline {
@@ -48,7 +64,18 @@
   --color-pastel-500: var(--color-pastel-500);
   --color-pastel-600: var(--color-pastel-600);
 
+  --color-galaxy-800: var(--color-galaxy-800);
+  --color-galaxy-900: var(--color-galaxy-900);
+
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+
+  --color-nav: var(--color-nav);
+
   --font-sans: var(--font-comfortaa), cursive;
+
+  /* Chỉ dùng cho câu quote ở Hero — phần còn lại của site vẫn Comfortaa */
+  --font-slogan: var(--font-noto-serif-display), serif;
 
   /* Chuyển động nền cho khối minh hoạ "liquid glass" ở Trang chủ.
      Dùng: animate-float, animate-float-slow, animate-drift */

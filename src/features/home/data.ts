@@ -58,10 +58,18 @@ const scheduleMock: ClassSession[] = [
   },
 ];
 
+/** Thứ tự hiển thị trong tuần: Thứ 2 → Chủ nhật.
+ *  dayOfWeek 0 = Chủ nhật nhưng phải đứng CUỐI khi hiển thị, đúng thói quen
+ *  đọc lịch của người Việt. */
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
 /**
  * Gom danh sách buổi học phẳng thành từng ngày để render mỗi ngày 1 card.
- * Chỉ trả về ngày CÓ lớp (yêu cầu: không hiện ngày trống), sắp xếp từ
- * Thứ 2 → Chủ nhật cho đúng thói quen đọc lịch của người Việt.
+ *
+ * Trả về ĐỦ CẢ 7 NGÀY, kể cả ngày không có lớp (khi đó `sessions` là mảng
+ * rỗng và card hiển thị trạng thái "Chưa có lịch học"). Nhờ vậy lịch tuần
+ * luôn đủ 7 ô, học sinh nhìn ra ngay ngày nào nghỉ thay vì phải tự suy ra
+ * từ những ngày bị thiếu.
  */
 export function groupByDay(sessions: ClassSession[]): DaySchedule[] {
   const byDay = new Map<number, ClassSession[]>();
@@ -72,19 +80,14 @@ export function groupByDay(sessions: ClassSession[]): DaySchedule[] {
     else byDay.set(session.dayOfWeek, [session]);
   }
 
-  // dayOfWeek 0 = Chủ nhật nhưng phải đứng CUỐI tuần khi hiển thị
-  const weekOrder = (day: number) => (day === 0 ? 7 : day);
-
-  return [...byDay.entries()]
-    .sort(([a], [b]) => weekOrder(a) - weekOrder(b))
-    .map(([dayOfWeek, daySessions]) => ({
-      dayOfWeek,
-      day: DAY_LABEL[dayOfWeek],
-      sessions: [...daySessions].sort((a, b) =>
-        a.startTime.localeCompare(b.startTime),
-      ),
-    }));
+  return WEEK_ORDER.map((dayOfWeek) => ({
+    dayOfWeek,
+    day: DAY_LABEL[dayOfWeek],
+    sessions: [...(byDay.get(dayOfWeek) ?? [])].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime),
+    ),
+  }));
 }
 
-/** Lịch đã gom theo ngày, dùng trực tiếp cho ScheduleSection. */
+/** Lịch đủ 7 ngày trong tuần, dùng trực tiếp cho ScheduleSection. */
 export const weeklySchedule: DaySchedule[] = groupByDay(scheduleMock);

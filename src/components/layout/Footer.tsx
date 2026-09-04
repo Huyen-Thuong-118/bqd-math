@@ -16,6 +16,9 @@ function FacebookIcon({ className }: { className?: string }) {
 /**
  * Footer — thông tin liên hệ hiển thị cuối MỌI trang.
  *
+ * Nền galaxy tối (galaxy-900 → galaxy-800) cố ý tương phản với thân trang
+ * sáng, khép lại chiều dọc của trang. Chữ và link vì vậy phải ở tông sáng.
+ *
  * Dữ liệu thật (địa chỉ, sđt, link fb) sẽ lấy từ bảng ContactInfo
  * (prisma/schema.prisma) qua features/notifications hoặc 1 bảng settings
  * riêng — hiện để placeholder, gom hết vào 1 object ngay dưới đây để
@@ -37,19 +40,23 @@ const quickLinks = NAV_LINKS.filter((link) => link.href !== "/");
 
 export function Footer() {
   return (
-    <footer className="mt-auto border-t border-navy-100 bg-pastel-50">
-      <div className="mx-auto max-w-6xl px-4 py-12">
+    <footer className="relative mt-auto overflow-hidden border-t border-white/10 bg-linear-to-b from-galaxy-900 to-galaxy-800">
+      {/* Đốm sáng "bầu trời sao" — thuần trang trí, bị overflow-hidden cắt gọn */}
+      <div className="pointer-events-none absolute -top-24 left-1/4 size-72 rounded-full bg-pastel-400/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-32 right-1/4 size-72 rounded-full bg-navy-300/15 blur-3xl" />
+
+      <div className="relative mx-auto max-w-6xl px-4 py-12">
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr_1.3fr]">
           {/* --- Cột 1: giới thiệu ngắn --- */}
           <div className="flex flex-col gap-3">
             <Link
               href="/"
-              className="text-lg font-semibold tracking-tight text-navy-500 transition-opacity hover:opacity-70"
+              className="text-lg font-semibold tracking-tight text-pastel-50 transition-opacity hover:opacity-70"
             >
-              BQD<span className="text-navy-300">Math</span>
+              BQD<span className="text-pastel-400">Math</span>
             </Link>
-            <h2 className="text-sm font-semibold text-navy-500">Về BQD Math</h2>
-            <p className="max-w-sm text-sm leading-relaxed text-navy-400">
+            <h2 className="text-sm font-semibold text-pastel-50">Về BQD Math</h2>
+            <p className="max-w-sm text-sm leading-relaxed text-pastel-200">
               {/* TODO: thay bằng mô tả thật về trung tâm */}
               Hệ thống ôn luyện &amp; thi thử Toán: câu hỏi ôn tập theo chương,
               phòng thi thử chấm điểm tự động và kho tài liệu cho lớp Cơ bản lẫn
@@ -59,7 +66,7 @@ export function Footer() {
 
           {/* --- Cột 2: liên kết nhanh (dùng lại NAV_LINKS) --- */}
           <nav aria-label="Liên kết nhanh" className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-navy-500">
+            <h2 className="text-sm font-semibold text-pastel-50">
               Liên kết nhanh
             </h2>
             <ul className="flex flex-col gap-2 text-sm">
@@ -67,7 +74,7 @@ export function Footer() {
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-navy-400 transition-colors hover:text-navy-600"
+                    className="text-pastel-200 transition-colors hover:text-white"
                   >
                     {link.label}
                   </Link>
@@ -77,41 +84,41 @@ export function Footer() {
           </nav>
 
           {/* --- Cột 3: thông tin giáo viên, card kính nhẹ --- */}
-          <div className="rounded-[2rem] border border-white/50 bg-pastel-100/60 p-5 shadow-[0_8px_32px_rgba(27,42,74,0.1)] backdrop-blur-xl">
-            <h2 className="text-sm font-semibold text-navy-500">
+          <div className="rounded-[2rem] border border-white/15 bg-white/5 p-5 shadow-[0_8px_32px_rgba(11,19,48,0.3)] backdrop-blur-xl">
+            <h2 className="text-sm font-semibold text-pastel-50">
               Thông tin giáo viên
             </h2>
-            <p className="mt-2 text-base font-semibold text-navy-600">
+            <p className="mt-2 text-base font-semibold text-white">
               {teacherContact.name}
             </p>
 
-            <ul className="mt-4 flex flex-col gap-3 text-sm text-navy-400">
+            <ul className="mt-4 flex flex-col gap-3 text-sm text-pastel-200">
               <li>
                 <a
                   href={`tel:${teacherContact.phone.replace(/\s/g, "")}`}
-                  className="flex items-center gap-2.5 transition-colors hover:text-navy-600"
+                  className="flex items-center gap-2.5 transition-colors hover:text-white"
                 >
-                  <Phone className="size-4 shrink-0 text-navy-300" aria-hidden />
+                  <Phone className="size-4 shrink-0 text-pastel-400" aria-hidden />
                   {teacherContact.phone}
-                  <span className="text-xs text-navy-200">(Zalo)</span>
+                  <span className="text-xs text-pastel-300/70">(Zalo)</span>
                 </a>
               </li>
               <li>
                 <a
                   href={`mailto:${teacherContact.email}`}
-                  className="flex items-center gap-2.5 transition-colors hover:text-navy-600"
+                  className="flex items-center gap-2.5 transition-colors hover:text-white"
                 >
-                  <Mail className="size-4 shrink-0 text-navy-300" aria-hidden />
+                  <Mail className="size-4 shrink-0 text-pastel-400" aria-hidden />
                   {teacherContact.email}
                 </a>
               </li>
               <li>
                 <a
                   href={teacherContact.mapUrl}
-                  className="flex items-start gap-2.5 transition-colors hover:text-navy-600"
+                  className="flex items-start gap-2.5 transition-colors hover:text-white"
                 >
                   <MapPin
-                    className="mt-0.5 size-4 shrink-0 text-navy-300"
+                    className="mt-0.5 size-4 shrink-0 text-pastel-400"
                     aria-hidden
                   />
                   {teacherContact.address}
@@ -120,9 +127,9 @@ export function Footer() {
               <li>
                 <a
                   href={teacherContact.facebook}
-                  className="flex items-center gap-2.5 transition-colors hover:text-navy-600"
+                  className="flex items-center gap-2.5 transition-colors hover:text-white"
                 >
-                  <FacebookIcon className="size-4 shrink-0 text-navy-300" />
+                  <FacebookIcon className="size-4 shrink-0 text-pastel-400" />
                   Facebook
                 </a>
               </li>
@@ -130,7 +137,7 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-10 border-t border-navy-100 pt-6 text-sm text-navy-400">
+        <div className="mt-10 border-t border-white/10 pt-6 text-sm text-pastel-200">
           <p>
             © {new Date().getFullYear()} BQD Math — Hệ thống ôn luyện &amp; thi
             thử Toán

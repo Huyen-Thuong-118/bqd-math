@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { motion, type Variants } from "motion/react";
-import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarDays } from "lucide-react";
 
-import { MathGlassVisual } from "./MathGlassVisual";
+import { PyramidBoxVisual } from "./PyramidBoxVisual";
 
 // TODO: thay câu quote thật
 const INSPIRING_QUOTE =
@@ -41,17 +41,12 @@ export function HeroSection() {
           viewport={{ once: true, amount: 0.3 }}
           className="flex flex-col items-start gap-6"
         >
-          <motion.span
-            variants={fadeUp}
-            className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-pastel-50/70 px-4 py-1.5 text-xs font-medium text-navy-400 shadow-[0_8px_24px_rgba(27,42,74,0.1)] backdrop-blur-xl sm:text-sm"
-          >
-            <Sparkles className="size-4 text-navy-300" aria-hidden />
-            Ôn luyện &amp; thi thử Toán cùng BQD Math
-          </motion.span>
-
+          {/* font-slogan = Noto Serif Display (xem globals.css + app/layout.tsx),
+              cố ý khác hẳn nét Comfortaa của phần còn lại trang. Chỉ thẻ này
+              dùng font đó — đoạn mô tả bên dưới vẫn Comfortaa. */}
           <motion.h1
             variants={fadeUp}
-            className="text-2xl leading-snug font-semibold text-balance text-navy-600 sm:text-3xl lg:text-4xl lg:leading-tight"
+            className="font-slogan text-2xl leading-snug font-semibold text-balance text-navy-600 italic sm:text-3xl lg:text-4xl lg:leading-tight"
           >
             &ldquo;{INSPIRING_QUOTE}&rdquo;
           </motion.h1>
@@ -99,7 +94,7 @@ export function HeroSection() {
           transition={{ duration: 0.7, ease: "easeOut", delay: 0.15 }}
           className="order-last"
         >
-          <MathGlassVisual />
+          <PyramidBoxVisual />
         </motion.div>
       </div>
     </section>
