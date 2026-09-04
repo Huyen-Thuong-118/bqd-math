@@ -13,7 +13,7 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
       **Reset**: sinh mật khẩu tạm ngẫu nhiên (`generateTempPassword()`),
       admin đọc/gửi cho HS đúng 1 lần lúc tạo, HS bắt buộc đổi mật khẩu ở
       lần đăng nhập kế tiếp (`mustChangePassword` trong schema).
-- [ ] Cài NextAuth (`lib/auth.ts`) — session dùng cookie `httpOnly`,
+- [x] Cài NextAuth (`src/auth.ts`) — session dùng cookie `httpOnly`,
       `secure`, `sameSite=lax` (mặc định của NextAuth, không cần tự cấu hình
       thêm nếu không có lý do đặc biệt).
 - [ ] **Rate limit đăng nhập** — chặn brute-force đoán mật khẩu. Khuyến
@@ -39,7 +39,9 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
       tra `attemptId` có thuộc về user đang đăng nhập không — ai biết được
       1 `attemptId` (dù đoán mò) đều ghi được đáp án vào đó. Phải thêm
       session check trước khi ghi, ngay khi NextAuth xong.
-- [ ] Middleware chặn toàn bộ `/admin/**` nếu `role !== "ADMIN"`.
+- [x] Proxy (`src/proxy.ts`, trước gọi là Middleware) chặn toàn bộ `/admin/**`
+      nếu `role !== "ADMIN"`, và `/lop-hoc|/on-tap|/thi-thu|/tai-lieu` nếu
+      chưa đăng nhập hoặc status PENDING/SUSPENDED.
 - [ ] HS chỉ query được lớp/đề của chính lớp mình — kiểm tra ở tầng
       `features/*/queries.ts`, không tin tưởng dữ liệu gửi từ client.
 

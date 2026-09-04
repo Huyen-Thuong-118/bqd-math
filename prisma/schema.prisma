@@ -17,68 +17,178 @@ datasource db {
 
 // ---------------- TÀI KHOẢN ----------------
 
+// GUEST đã bỏ: hệ thống chỉ còn 2 role thật — ADMIN (giáo viên, seed sẵn qua
+// prisma/seed.ts, không đăng ký) và STUDENT (đăng ký qua form, chờ duyệt).
 enum Role {
   ADMIN // giáo viên — toàn quyền
   STUDENT
-  GUEST
+}
+
+// PENDING: vừa đăng ký, chờ admin duyệt (chưa đăng nhập được).
+// ACTIVE: đã duyệt, đăng nhập bình thường.
+// SUSPENDED: admin thu hồi quyền — không đăng nhập được, tự xóa vĩnh viễn sau
+// 30 ngày kể từ suspendedAt qua cron job (chưa làm ở migration này).
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
 }
 
 model User {
-  id          String  @id @default(cuid())
-  role        Role    @default(STUDENT)
-  name        String
-  email       String? @unique
+  id     String        @id @default(cuid())
+  role   Role          @default(STUDENT)
+  status AccountStatus @default(PENDING)
+  name   String
+  email  String        @unique
+
+  // Nullable dù form đăng ký luôn bắt buộc nhập cả 2: tài khoản tạo qua Google
+  // (PrismaAdapter tự tạo User chỉ từ email/name/image khi đăng nhập lần đầu)
+  // sẽ có 2 field này = null cho tới khi hoàn tất hồ sơ — xem callbacks.signIn
+  // trong auth.ts. KHÔNG có @default nên NOT NULL sẽ làm crash bước tạo User
+  // đó; STUDENT ràng buộc bắt buộc khác nhau vẫn validate đủ ở form + server
+  // action đăng ký (features/auth/actions/register.ts).
+  studentPhone String? @unique
+  parentPhone  String? // SĐT phụ huynh — dùng gửi SMS, bắt buộc khác studentPhone (validate ở form)
 
   // CHỈ lưu hash 1 chiều (bcrypt) — KHÔNG BAO GIỜ lưu mật khẩu dạng đọc/giải
   // mã ngược được, kể cả để admin "xem lại". Admin cần hỗ trợ HS quên mật
   // khẩu thì dùng chức năng RESET (sinh mật khẩu tạm mới), không phải xem
   // lại mật khẩu cũ. Xem lib/password.ts và SECURITY.md.
-  passwordHash String
+  // Nullable vì tài khoản đăng ký bằng Google (GoogleAuthButton) có thể chưa
+  // từng đặt mật khẩu.
+  passwordHash String?
 
   // Đánh dấu mật khẩu vừa được admin reset — bắt buộc HS đổi mật khẩu ở
   // lần đăng nhập tiếp theo thay vì tiếp tục dùng mật khẩu tạm admin biết.
   mustChangePassword Boolean @default(false)
 
-  parentPhone String? // SĐT phụ huynh — dùng gửi SMS
-  emailOptIn  Boolean @default(false) // đăng ký nhận email khi có đề mới
+  emailOptIn  Boolean   @default(false) // đăng ký nhận email khi có đề mới
+  suspendedAt DateTime? // chỉ có giá trị khi status = SUSPENDED, xem features/accounts
 
-  classesTaught   Class[] // các lớp GV này đang dạy (role = ADMIN)
-  classes         ClassStudent[] // các lớp HS này tham gia (role = STUDENT)
-  examAttempts    ExamAttempt[]
-  reviewAttempts  ReviewAttempt[]
-  notifications   Notification[]
+  // 2 field bắt buộc phải có để @auth/prisma-adapter hoạt động (Google OAuth),
+  // kể cả khi app không tự gửi email xác thực riêng — xem NextAuth Prisma Adapter.
+  emailVerified DateTime?
+  image         String?
+
+  // classesTaught đã bỏ: Class không còn teacherId (chỉ 1 role ADMIN toàn
+  // quyền, không cần gán GV theo từng lớp) — xem ghi chú ở model Class.
+  classEnrollments  ClassEnrollment[] // các lớp HS này tham gia (role = STUDENT)
+  examAttempts      ExamAttempt[]
+  reviewAttempts    ReviewAttempt[]
+  notifications     Notification[]
+  accounts          Account[]
+  sessions          Session[]
+  passwordResetOtps PasswordResetOtp[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ---------------- XÁC THỰC (NextAuth) ----------------
+
+// Account/Session/VerificationToken giữ ĐÚNG tên model + field theo chuẩn
+// @auth/prisma-adapter — adapter đọc bằng tên cố định, đổi tên là adapter gãy.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Riêng cho OTP quên mật khẩu — KHÔNG dùng chung VerificationToken của
+// NextAuth vì cần lưu mã dạng hash (không phải token dài ngẫu nhiên) kèm
+// trạng thái đã dùng hay chưa (consumedAt).
+model PasswordResetOtp {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String // hash SHA-256 của mã OTP 6 số, không lưu plaintext
+  expiresAt  DateTime // ví dụ: tạo lúc gửi + 5 phút
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ---------------- LỚP HỌC ----------------
 
-model Class {
-  id        String   @id @default(cuid())
-  name      String
-  teacherId String
-  teacher   User     @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+// Chỉ 1 role ADMIN toàn quyền (xem enum Role) nên Class KHÔNG có teacherId —
+// khác bản sơ khai trước đó (từng có teacherId/teacher giả định nhiều GV).
+// Đã xác nhận teacherId/teacher/ClassStudent KHÔNG được reference ở bất kỳ
+// đâu trong src/ (chỉ còn trong README kế hoạch chưa implement) nên đổi
+// thẳng, không cần giữ tạm.
+enum ClassStatus {
+  ACTIVE
+  ARCHIVED
+}
 
-  students  ClassStudent[]
-  documents Document[]
-  exams     Exam[]
+model Class {
+  id          String      @id @default(cuid())
+  name        String
+  level       ClassLevel // dùng lại enum ClassLevel hiện có (BASIC/ADVANCED,
+  // xem TeachingSchedule bên dưới) — KHÔNG tạo enum CO_BAN/NANG_CAO riêng vì
+  // trùng tên với enum đã có, đồng thời giá trị BASIC/ADVANCED đang được
+  // features/home (data.ts, DayScheduleCard.tsx, types.ts) dùng thật.
+  schedule    String
+  description String?
+  status      ClassStatus @default(ACTIVE)
+
+  enrollments   ClassEnrollment[] // N-N với User (student) — xem ClassEnrollment
+  documents     Document[]
+  examLinks     ExamClass[] // N-N với Exam — xem ExamClass
+  questionLinks ClassReviewQuestion[] // N-N với ReviewQuestion — xem ClassReviewQuestion
+
+  // DEPRECATED: quan hệ 1-N cũ qua field Exam.classId (single FK) — back-relation
+  // này BẮT BUỘC phải giữ vì Exam.classId/Exam.class vẫn còn (xem ghi chú ở
+  // model Exam), Prisma yêu cầu khai báo đủ 2 chiều quan hệ. Chuyển hẳn Exam
+  // sang dùng examLinks (ExamClass) thì xoá field này cùng lúc.
+  exams Exam[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-// Bảng trung gian nhiều-nhiều User <-> Class
-model ClassStudent {
-  id      String @id @default(cuid())
-  classId String
-  userId  String
-  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
-  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+// N-N Class <-> User (student) — thay cho ClassStudent cũ (đã xoá, không ai
+// reference tới trong src/ nên gộp luôn thay vì giữ song song 2 bảng làm
+// cùng 1 việc).
+model ClassEnrollment {
+  id         String   @id @default(cuid())
+  classId    String
+  studentId  String
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrolledAt DateTime @default(now())
 
-  joinedAt DateTime @default(now())
-
-  @@unique([classId, userId])
+  @@unique([classId, studentId])
 }
 
 // ---------------- TÀI LIỆU ----------------
@@ -96,11 +206,11 @@ model Folder {
 }
 
 model Document {
-  id          String   @id @default(cuid())
-  title       String
-  fileUrl     String
-  answerUrl   String? // file lời giải — optional
-  showAnswer  Boolean  @default(false) // GV quyết định hiện lời giải cho HS
+  id         String  @id @default(cuid())
+  title      String
+  fileUrl    String
+  answerUrl  String? // file lời giải — optional
+  showAnswer Boolean @default(false) // GV quyết định hiện lời giải cho HS
 
   allowDownload Boolean @default(false)
 
@@ -120,10 +230,15 @@ model Document {
 // ---------------- ĐỀ THI ----------------
 
 model Exam {
-  id        String  @id @default(cuid())
-  title     String
-  classId   String?
-  class     Class?  @relation(fields: [classId], references: [id])
+  id    String @id @default(cuid())
+  title String
+
+  // DEPRECATED: dùng examLinks (ExamClass, N-N) thay cho quan hệ 1-N đơn này
+  // — giữ tạm vì đã tồn tại từ code cũ, hiện KHÔNG có nơi nào trong src/
+  // reference classId/class của Exam (đã grep xác nhận), nhưng để bạn tự
+  // quyết định lúc nào dọn hẳn thay vì tự ý xoá.
+  classId String?
+  class   Class?  @relation(fields: [classId], references: [id])
 
   examFileUrl   String // luôn hiện với HS
   answerFileUrl String? // GV quyết định có hiện hay không
@@ -134,18 +249,31 @@ model Exam {
   availableFrom DateTime?
   availableTo   DateTime?
 
-  durationMinutes   Int? // null nếu là đề luyện tập không giới hạn giờ
-  allowDownload     Boolean @default(false)
-  hideWrongAnswers  Boolean @default(false) // ẩn đáp án đúng cho câu trả lời sai
+  durationMinutes  Int? // null nếu là đề luyện tập không giới hạn giờ
+  maxAttempts      Int? // null = không giới hạn số lần làm
+  allowDownload    Boolean @default(false)
+  hideWrongAnswers Boolean @default(false) // ẩn đáp án đúng cho câu trả lời sai
 
   // Cấu trúc phiếu tô: mảng JSON mô tả số câu mỗi phần, vd:
   // [{ "part": 1, "questions": 40, "type": "multiple_choice" }, ...]
   answerSheetConfig Json?
 
-  attempts ExamAttempt[]
+  attempts  ExamAttempt[]
+  examLinks ExamClass[] // N-N với Class — cách gán đề vào lớp MỚI, xem ExamClass
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// N-N Exam <-> Class — 1 đề gán được cho nhiều lớp, 1 lớp có nhiều đề.
+model ExamClass {
+  id      String @id @default(cuid())
+  examId  String
+  classId String
+  exam    Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  class   Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, classId])
 }
 
 enum ExamMode {
@@ -165,7 +293,7 @@ model ExamAttempt {
   startedAt   DateTime  @default(now())
   submittedAt DateTime?
 
-  answers        AnswerHistory[]
+  answers AnswerHistory[]
 
   @@index([examId, userId])
 }
@@ -173,12 +301,12 @@ model ExamAttempt {
 // Lưu MỌI lần đổi đáp án — không ghi đè, để hiển thị lịch sử đầy đủ.
 // Sort khi hiển thị: theo questionNumber -> changedAt.
 model AnswerHistory {
-  id              String      @id @default(cuid())
-  attemptId       String
-  attempt         ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  questionNumber  Int
-  selectedAnswer  String
-  changedAt       DateTime    @default(now())
+  id             String      @id @default(cuid())
+  attemptId      String
+  attempt        ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionNumber Int
+  selectedAnswer String
+  changedAt      DateTime    @default(now())
 
   @@index([attemptId, questionNumber])
 }
@@ -198,16 +326,28 @@ model ReviewQuestion {
   chapterId String
   chapter   Chapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
-  content String
-  options Json // ["A. ...", "B. ...", "C. ...", "D. ..."]
+  content       String
+  options       Json // ["A. ...", "B. ...", "C. ...", "D. ..."]
   correctAnswer String
 
   textSolution String?
   videoUrl     String? // null -> hiện "GV chưa làm video"
 
-  attempts ReviewAttempt[]
+  attempts   ReviewAttempt[]
+  classLinks ClassReviewQuestion[] // N-N với Class — dùng lại câu hỏi cho nhiều lớp
 
   createdAt DateTime @default(now())
+}
+
+// N-N ReviewQuestion <-> Class — 1 câu hỏi dùng lại được cho nhiều lớp.
+model ClassReviewQuestion {
+  id         String         @id @default(cuid())
+  questionId String
+  classId    String
+  question   ReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  class      Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, classId])
 }
 
 model ReviewAttempt {
@@ -243,16 +383,16 @@ enum NotificationType {
 }
 
 model Notification {
-  id      String            @id @default(cuid())
+  id      String           @id @default(cuid())
   userId  String
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type    NotificationType
   content String
-  sentAt  DateTime          @default(now())
+  sentAt  DateTime         @default(now())
 }
 
 model ContactInfo {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   address     String
   mapUrl      String
   facebookUrl String?

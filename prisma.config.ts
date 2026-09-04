@@ -25,6 +25,11 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // Prisma 7 đọc lệnh seed từ đây, KHÔNG còn từ field "prisma.seed" trong
+    // package.json (quy ước cũ) — `npx prisma db seed` và `migrate dev` sẽ
+    // tự chạy lệnh này. Script "seed" trong package.json chỉ để gọi tay
+    // (`npm run seed`) mà không cần qua Prisma CLI.
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
     url: env("DIRECT_URL"),
