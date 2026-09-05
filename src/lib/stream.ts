@@ -2,7 +2,7 @@
  * Client gọi Cloudflare Stream API — dùng cho video lời giải.
  * Vì sao không để video thô trong R2: Stream tự động encode nhiều độ phân
  * giải (adaptive bitrate) — quan trọng vì HS xem bằng mạng 4G ở nhiều nơi
- * khác nhau. Xem ARCHITECTURE.md mục "Lưu trữ tài liệu".
+ * khác nhau. Xem docs/architecture.md mục "Lưu trữ tài liệu".
  *
  * Cloudflare Stream không có SDK Node chính thức — gọi thẳng REST API.
  */

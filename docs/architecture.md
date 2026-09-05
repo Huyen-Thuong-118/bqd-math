@@ -1,4 +1,6 @@
-# Tại sao tổ chức project như vậy?
+# Kiến trúc dự án
+
+Tài liệu này giải thích các quyết định tổ chức code chính của BQD Math.
 
 Nguyên tắc duy nhất: **`app/` chỉ lo routing, `features/` chứa tất cả logic.**
 

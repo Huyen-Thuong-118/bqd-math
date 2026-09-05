@@ -1,31 +1,40 @@
 # features/exams
 
-Module lớn nhất: Đề thi, Phiếu tô đáp án, Phòng thi thử + Luyện tập.
+Module đề thi, lượt làm bài, autosave, chấm điểm và kết quả.
 
-## Đã có
+## Đã triển khai
 
-- `types.ts` — `AnswerChange`, `AnswerBatchPayload`
-- `actions.ts` — `saveAnswerBatch()` (ghi batch), `getAnswerHistory()`, `getLatestAnswers()`
-- `hooks/useAnswerBuffer.ts` — hook chính khi HS làm bài: buffer đáp án ở
-  client, gộp gửi lên server mỗi ~2.5s thay vì gửi mỗi lần click (chống
-  nghẽn DB khi nhiều HS thi cùng lúc — xem ARCHITECTURE.md)
-- `components/AnswerHistory.tsx` — hiện lịch sử đổi đáp án dưới mỗi câu
-- API route tương ứng: `app/api/exams/[examId]/answers/route.ts`
+- `queries.ts` chỉ trả đề được gán vào lớp của học sinh hiện tại; DTO trang
+  làm bài không chứa answer key.
+- `actions.ts` bắt đầu/tiếp tục attempt và nộp bài, đều tự kiểm tra session.
+- `repository.ts` validate batch, ownership, deadline và trạng thái trước khi
+  ghi lịch sử đáp án.
+- `service.ts` + `grading.ts` chấm thang 10, idempotent và lưu snapshot.
+- `useAnswerBuffer.ts` cập nhật UI ngay, gộp autosave mỗi 2,5 giây, retry khi
+  lỗi và flush trước khi nộp.
+- `ExamList`, `ExamWorkspace`, `ExamTimer` tạo luồng học sinh hoàn chỉnh.
+- Route kết quả hiển thị điểm, đúng/sai/bỏ trống và lời giải.
+- `admin-actions.ts` tạo đề từ hai PDF, cấu hình lịch, lớp, quyền tải/lời giải,
+  phiếu chuẩn 12 trắc nghiệm + 4 đúng/sai + 6 trả lời ngắn hoặc tùy chỉnh.
+- Nút “Quét bằng Gemini” gửi PDF từ server tới model cấu hình bởi
+  `GEMINI_MODEL` (mặc định `gemini-3.1-flash-lite`) và yêu cầu structured JSON
+  cho cấu trúc đề cùng answer key. Nếu Gemini lỗi hoặc không đọc đủ đáp án,
+  hệ thống mới fallback sang worker OCR local trong `services/ocr`: PyMuPDF lấy
+  text layer trước, Tesseract `vie+eng` chỉ xử lý trang scan. Giáo viên xác nhận
+  kết quả trước khi lưu; API key không bao giờ được gửi xuống trình duyệt.
+  Parser hỗ trợ cả bảng `1. D`/`Đáp án: D` và bảng `1) D`/`Đáp án D` trong
+  các bộ PDF mẫu; `verify:slice-2` chạy regression với cả `1.pdf` đến `3.pdf`.
+- `AnswerSheet` hiển thị đề bên trái / phiếu bên phải; hỗ trợ A–D, bốn ý
+  đúng/sai và câu trả lời ngắn. Đúng/sai được chấm điểm từng ý.
+- `PdfViewer` render PDF canvas có scroll, zoom, watermark và ẩn thao tác tải.
+- Route file kiểm tra session, lớp, trạng thái nộp và cấu hình giáo viên trước
+  khi trả dữ liệu; storage dùng R2 hoặc fallback private local.
 
-## Còn thiếu (TODO)
+## Chưa triển khai
 
-- `queries.ts` — danh sách đề, điểm đã làm
-- `answer-sheet.ts` — logic sinh phiếu tô theo số câu mỗi phần
-- `components/PdfViewer.tsx` — hiển thị PDF qua signed URL từ `lib/storage.ts`,
-  render bằng PDF.js canvas (không dùng iframe), thêm watermark tên HS
-- `components/AnswerSheet.tsx` — ghép `useAnswerBuffer` + UI phiếu tô thật
-- `components/ExamTimer.tsx` — đếm ngược tính ở client, chỉ đồng bộ lại
-  với server mỗi ~30s (không polling liên tục)
-- Xác thực attemptId thuộc về user hiện tại trong API route trước khi ghi
-- Logic chấm điểm (`submitExam`) — tách khỏi request nộp bài nếu chấm nặng
+- Sửa/xóa/publish/version đề.
+- Dashboard lịch sử nhiều lượt và thống kê lớp (lát cắt 3).
+- OCR ảnh phiếu tô viết tay/tô giấy.
 
-**Liên quan:** `prisma/schema.prisma` model `Exam`, `ExamAttempt`, `AnswerHistory`.
-`lib/storage.ts` (PDF qua R2), `lib/stream.ts` (video qua Cloudflare Stream).
-
-> Ghi chú: "Thi thử" và "Luyện tập" dùng CHUNG component, chỉ khác 1 prop
-> `mode: "mock" | "practice"` quyết định có hiện `ExamTimer` hay không.
+Kiểm thử tích hợp local bằng `npm run verify:slice-1` và
+`npm run verify:slice-2` khi dev server đang chạy.

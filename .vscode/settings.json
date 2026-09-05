@@ -1,0 +1,10 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    ".env.example": ".env,.env.local,.env.development,.env.production,.env.test",
+    "AGENTS.md": "CLAUDE.md",
+    "next.config.ts": "next-env.d.ts,eslint.config.mjs,postcss.config.mjs,tsconfig.json,vercel.json",
+    "package.json": "package-lock.json"
+  }
+}

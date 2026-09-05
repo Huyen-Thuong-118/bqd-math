@@ -1,49 +1,46 @@
-import { db } from "@/lib/db";
-import type { AnswerBatchPayload } from "./types";
+"use server";
 
-/**
- * Ghi 1 BATCH nhiều lần đổi đáp án trong 1 lần gọi DB (createMany), thay vì
- * ghi từng lần đổi 1 request riêng. Đây là điểm mấu chốt chống nghẽn khi
- * 500 HS thi cùng lúc — xem ARCHITECTURE.md mục "500 người thi cùng lúc".
- *
- * Được gọi từ app/api/exams/[examId]/answers/route.ts, KHÔNG gọi trực
- * tiếp từ component (theo quy ước app/ mỏng, features/ chứa logic thật).
- */
-export async function saveAnswerBatch(payload: AnswerBatchPayload) {
-  if (payload.changes.length === 0) return { count: 0 };
+import { ExamAccessError, requireActiveStudentId } from "./access";
+import { startAttemptForUser, submitAttemptForUser } from "./service";
 
-  const result = await db.answerHistory.createMany({
-    data: payload.changes.map((change) => ({
-      attemptId: payload.attemptId,
-      questionNumber: change.questionNumber,
-      selectedAnswer: change.selectedAnswer,
-      changedAt: new Date(change.changedAt),
-    })),
-  });
+type StartExamResult =
+  | { success: true; attemptId: string; submitted: boolean }
+  | { success: false; error: string };
 
-  return result;
-}
+type SubmitExamResult =
+  | { success: true; attemptId: string }
+  | { success: false; error: string };
 
-/**
- * Lấy toàn bộ lịch sử đổi đáp án của 1 lần làm bài, sort đúng thứ tự yêu
- * cầu: theo STT câu hỏi trước, rồi theo thời gian thay đổi.
- */
-export async function getAnswerHistory(attemptId: string) {
-  return db.answerHistory.findMany({
-    where: { attemptId },
-    orderBy: [{ questionNumber: "asc" }, { changedAt: "asc" }],
-  });
-}
-
-/**
- * Đáp án hiện tại (mới nhất) của từng câu — dùng để render lại trạng thái
- * đã chọn khi HS load lại trang giữa chừng lúc thi.
- */
-export async function getLatestAnswers(attemptId: string) {
-  const all = await getAnswerHistory(attemptId);
-  const latest = new Map<number, string>();
-  for (const entry of all) {
-    latest.set(entry.questionNumber, entry.selectedAnswer); // ghi đè -> giữ lần cuối vì đã sort tăng dần theo thời gian
+export async function startExam(examId: string): Promise<StartExamResult> {
+  try {
+    const userId = await requireActiveStudentId();
+    const result = await startAttemptForUser(examId, userId);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error("startExam thất bại:", error);
+    return {
+      success: false,
+      error:
+        error instanceof ExamAccessError
+          ? error.message
+          : "Không thể bắt đầu bài thi, vui lòng thử lại.",
+    };
   }
-  return latest;
+}
+
+export async function submitExam(attemptId: string): Promise<SubmitExamResult> {
+  try {
+    const userId = await requireActiveStudentId();
+    await submitAttemptForUser(attemptId, userId);
+    return { success: true, attemptId };
+  } catch (error) {
+    console.error("submitExam thất bại:", error);
+    return {
+      success: false,
+      error:
+        error instanceof ExamAccessError
+          ? error.message
+          : "Không thể nộp bài, vui lòng thử lại.",
+    };
+  }
 }

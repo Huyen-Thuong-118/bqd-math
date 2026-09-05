@@ -18,10 +18,7 @@ export default async function AuthLayout({
 }) {
   const session = await auth();
   if (session?.user) {
-    if (session.user.role === "ADMIN") redirect("/admin");
-    if (session.user.status === "PENDING") redirect("/cho-duyet");
-    if (session.user.status === "SUSPENDED") redirect("/tai-khoan-bi-khoa");
-    redirect("/");
+    redirect("/sau-dang-nhap");
   }
 
   return (

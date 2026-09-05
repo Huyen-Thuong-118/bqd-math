@@ -22,10 +22,19 @@ export default auth(async (req) => {
   );
 
   if (isAdminRoute) {
-    // role không có cơ chế đổi động trong hệ thống này — lấy từ JWT là đủ,
-    // không cần query lại như status bên dưới.
-    if (!user || user.role !== "ADMIN") {
+    if (!user) {
       return Response.redirect(new URL("/dang-nhap", req.url));
+    }
+
+    const current = await db.user.findUnique({
+      where: { id: user.id },
+      select: { role: true, status: true },
+    });
+    if (!current || current.role !== "ADMIN") {
+      return Response.redirect(new URL("/dang-nhap", req.url));
+    }
+    if (current.status === "SUSPENDED") {
+      return Response.redirect(new URL("/tai-khoan-bi-khoa", req.url));
     }
   }
 
@@ -38,7 +47,13 @@ export default auth(async (req) => {
     // thẳng DB lấy giá trị MỚI NHẤT thay vì user.status từ token.
     const current = await db.user.findUnique({
       where: { id: user.id },
-      select: { status: true },
+      select: {
+        role: true,
+        status: true,
+        studentPhone: true,
+        parentPhone: true,
+        mustChangePassword: true,
+      },
     });
 
     // null: tài khoản đã bị cron job xoá hẳn sau 30 ngày SUSPENDED (xem
@@ -46,11 +61,20 @@ export default auth(async (req) => {
     // phân biệt để khỏi lộ "tài khoản không còn tồn tại".
     const status = current?.status ?? "SUSPENDED";
 
+    if (status === "SUSPENDED") {
+      return Response.redirect(new URL("/tai-khoan-bi-khoa", req.url));
+    }
+    if (current?.role !== "STUDENT") {
+      return Response.redirect(new URL("/admin", req.url));
+    }
+    if (!current.studentPhone || !current.parentPhone) {
+      return Response.redirect(new URL("/hoan-tat-ho-so", req.url));
+    }
     if (status === "PENDING") {
       return Response.redirect(new URL("/cho-duyet", req.url));
     }
-    if (status === "SUSPENDED") {
-      return Response.redirect(new URL("/tai-khoan-bi-khoa", req.url));
+    if (current.mustChangePassword) {
+      return Response.redirect(new URL("/doi-mat-khau", req.url));
     }
   }
 });

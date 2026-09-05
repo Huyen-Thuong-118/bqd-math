@@ -3,7 +3,7 @@
 Đăng nhập/đăng ký, phân quyền 2 role: `ADMIN` (giáo viên, seed sẵn qua
 `prisma/seed.ts`, không đăng ký) và `STUDENT` (đăng ký qua form, chờ duyệt).
 
-⚠️ Đọc [`SECURITY.md`](../../../SECURITY.md) ở gốc repo trước khi implement
+⚠️ Đọc [`docs/security.md`](../../../docs/security.md) trước khi implement
 module này — đặc biệt phần mật khẩu (không bao giờ cho admin xem lại mật
 khẩu HS, chỉ có chức năng Reset).
 

@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Clock } from "lucide-react";
+
+import { auth } from "@/auth";
+import { SignOutButton } from "@/features/auth/components/SignOutButton";
+import {
+  findAccountAccess,
+  getAccountDestination,
+} from "@/features/auth/lib/account-access";
 
 export const metadata: Metadata = {
   title: "Đang chờ duyệt | BQD Math",
@@ -8,7 +16,16 @@ export const metadata: Metadata = {
 
 // Proxy (src/proxy.ts) điều hướng HS có status PENDING vào đây khi cố vào
 // trang cần đăng nhập — dùng chung style card với app/(auth) cho nhất quán.
-export default function PendingApprovalPage() {
+export const dynamic = "force-dynamic";
+
+export default async function PendingApprovalPage() {
+  const session = await auth();
+  if (!session?.user.id) redirect("/dang-nhap");
+  const account = await findAccountAccess(session.user.id);
+  if (!account) redirect("/dang-nhap");
+  const destination = getAccountDestination(account);
+  if (destination !== "/cho-duyet") redirect(destination);
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-pastel-100 px-4 py-10">
       <div className="w-full max-w-md rounded-[2rem] bg-white p-8 text-center shadow-[0_20px_60px_rgba(27,42,74,0.12)] sm:p-10">
@@ -28,6 +45,9 @@ export default function PendingApprovalPage() {
         >
           Về trang chủ
         </Link>
+        <div>
+          <SignOutButton />
+        </div>
       </div>
     </div>
   );

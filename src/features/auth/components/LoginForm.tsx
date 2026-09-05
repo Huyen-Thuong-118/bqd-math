@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { getSession, signIn } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   "account-suspended": "Tài khoản đã bị thu hồi quyền truy cập",
 };
 
-export function LoginForm() {
+export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -61,10 +61,7 @@ export function LoginForm() {
       return;
     }
 
-    // signIn() không tự trả về session mới — gọi lại để biết role, quyết
-    // định điều hướng admin hay trang chủ.
-    const session = await getSession();
-    router.push(session?.user.role === "ADMIN" ? "/admin" : "/");
+    router.push("/sau-dang-nhap");
     router.refresh();
   }
 
@@ -178,7 +175,7 @@ export function LoginForm() {
         <span className="h-px flex-1 bg-navy-100" />
       </div>
 
-      <GoogleAuthButton label="Đăng nhập bằng Google" />
+      <GoogleAuthButton label="Đăng nhập bằng Google" enabled={googleEnabled} />
 
       <p className="text-center text-sm text-navy-400">
         Chưa có tài khoản?{" "}

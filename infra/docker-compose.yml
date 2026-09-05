@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bqdmath
+      POSTGRES_USER: bqdmath
+      POSTGRES_PASSWORD: bqdmath_dev
+    ports:
+      # Chỉ máy hiện tại truy cập được; không mở PostgreSQL ra mạng LAN/Internet.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - bqdmath_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bqdmath -d bqdmath"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ocr:
+    build:
+      context: ./services/ocr
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8001:8000"
+    environment:
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  bqdmath_postgres_data:

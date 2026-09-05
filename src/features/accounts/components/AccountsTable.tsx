@@ -34,6 +34,7 @@ interface AccountActionHandlers {
   onReject: (account: StudentAccount) => void;
   onSuspend: (account: StudentAccount) => void;
   onReactivate: (id: string) => void;
+  onResetPassword: (account: StudentAccount) => void;
 }
 
 interface AccountsTableProps extends AccountActionHandlers {
@@ -49,6 +50,7 @@ export function AccountsTable({
   onReject,
   onSuspend,
   onReactivate,
+  onResetPassword,
 }: AccountsTableProps) {
   if (accounts.length === 0) {
     return (
@@ -58,7 +60,13 @@ export function AccountsTable({
     );
   }
 
-  const actionProps = { onApprove, onReject, onSuspend, onReactivate };
+  const actionProps = {
+    onApprove,
+    onReject,
+    onSuspend,
+    onReactivate,
+    onResetPassword,
+  };
 
   return (
     <>
@@ -154,6 +162,7 @@ function AccountActions({
   onReject,
   onSuspend,
   onReactivate,
+  onResetPassword,
 }: AccountActionHandlers & { account: StudentAccount; isPending: boolean }) {
   const spinner = <Loader2 className="size-3.5 animate-spin" aria-hidden />;
 
@@ -190,18 +199,32 @@ function AccountActions({
 
   if (account.status === "ACTIVE") {
     return (
-      <button
-        type="button"
-        onClick={() => onSuspend(account)}
-        disabled={isPending}
-        className={cn(
-          actionButtonClass,
-          "inline-flex items-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 disabled:pointer-events-none disabled:opacity-60",
-        )}
-      >
-        {isPending && spinner}
-        Thu hồi quyền
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onResetPassword(account)}
+          disabled={isPending}
+          className={cn(
+            actionButtonClass,
+            "inline-flex items-center gap-1.5 border border-navy-200 text-navy-500 hover:bg-pastel-100 disabled:pointer-events-none disabled:opacity-60",
+          )}
+        >
+          {isPending && spinner}
+          Đặt lại MK
+        </button>
+        <button
+          type="button"
+          onClick={() => onSuspend(account)}
+          disabled={isPending}
+          className={cn(
+            actionButtonClass,
+            "inline-flex items-center gap-1.5 border border-red-300 text-red-600 hover:bg-red-50 disabled:pointer-events-none disabled:opacity-60",
+          )}
+        >
+          {isPending && spinner}
+          Thu hồi quyền
+        </button>
+      </div>
     );
   }
 

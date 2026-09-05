@@ -1,15 +1,28 @@
-// Giao diện làm bài: phiếu tô đáp án + đồng hồ đếm ngược (nếu là "thi thử")
-// hoặc không đếm giờ (nếu là "luyện tập") — cùng 1 UI, khác chế độ.
+import { notFound, redirect } from "next/navigation";
+
+import { ExamWorkspace } from "@/features/exams/components/ExamWorkspace";
+import { getTakingAttempt } from "@/features/exams/queries";
+
+export const dynamic = "force-dynamic";
+
 export default async function ExamTakingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ examId: string }>;
+  searchParams: Promise<{ attemptId?: string | string[] }>;
 }) {
   const { examId } = await params;
-  return (
-    <section className="space-y-4">
-      <h1 className="text-2xl font-semibold text-navy-600">Đề #{examId}</h1>
-      {/* TODO: <PdfViewer /> + <AnswerSheet /> + <ExamTimer /> (features/exams/components) */}
-    </section>
-  );
+  const query = await searchParams;
+  const attemptId =
+    typeof query.attemptId === "string" ? query.attemptId : undefined;
+  if (!attemptId) redirect("/thi-thu");
+
+  const attempt = await getTakingAttempt(examId, attemptId);
+  if (!attempt) notFound();
+  if ("submitted" in attempt) {
+    redirect(`/thi-thu/${examId}/result?attemptId=${attemptId}`);
+  }
+
+  return <ExamWorkspace attempt={attempt} />;
 }

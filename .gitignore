@@ -35,6 +35,9 @@ yarn-error.log*
 # ...trừ file mẫu: cần commit để biết dự án dùng những biến nào
 !.env.example
 
+# PDF upload local khi chưa cấu hình Cloudflare R2
+storage/uploads/
+
 # vercel
 .vercel
 
@@ -49,4 +52,5 @@ next-env.d.ts
 # IDE
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 .idea

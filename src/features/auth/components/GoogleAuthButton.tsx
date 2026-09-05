@@ -29,7 +29,13 @@ function GoogleIcon() {
   );
 }
 
-export function GoogleAuthButton({ label }: { label: string }) {
+export function GoogleAuthButton({
+  label,
+  enabled,
+}: {
+  label: string;
+  enabled: boolean;
+}) {
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleClick() {
@@ -37,25 +43,32 @@ export function GoogleAuthButton({ label }: { label: string }) {
     try {
       // redirect mặc định true — signIn() tự điều hướng sang Google, chỉ
       // reset loading nếu có lỗi xảy ra TRƯỚC khi kịp chuyển trang.
-      await signIn("google");
+      await signIn("google", { redirectTo: "/sau-dang-nhap" });
     } catch {
       setIsLoading(false);
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={isLoading}
-      className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-navy-200/60 bg-white px-6 py-3 text-sm font-medium text-navy-500 transition-colors hover:bg-pastel-50 disabled:pointer-events-none disabled:opacity-70"
-    >
-      {isLoading ? (
-        <Loader2 className="size-5 animate-spin" aria-hidden />
-      ) : (
-        <GoogleIcon />
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isLoading || !enabled}
+        className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-navy-200/60 bg-white px-6 py-3 text-sm font-medium text-navy-500 transition-colors hover:bg-pastel-50 disabled:pointer-events-none disabled:opacity-70"
+      >
+        {isLoading ? (
+          <Loader2 className="size-5 animate-spin" aria-hidden />
+        ) : (
+          <GoogleIcon />
+        )}
+        {label}
+      </button>
+      {!enabled && (
+        <p className="text-center text-xs text-amber-600">
+          Chưa cấu hình Google OAuth trong file .env
+        </p>
       )}
-      {label}
-    </button>
+    </div>
   );
 }

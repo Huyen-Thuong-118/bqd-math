@@ -1,63 +1,99 @@
+import "server-only";
+
+import path from "node:path";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-/**
- * Client cho Cloudflare R2 — dùng API S3-compatible (không cần SDK riêng).
- * R2 KHÔNG tính phí egress, phù hợp lưu PDF đề thi/tài liệu được xem đi
- * xem lại nhiều lần bởi hàng trăm học sinh. Xem ARCHITECTURE.md mục
- * "Lưu trữ tài liệu" để biết lý do chọn R2 thay vì S3.
- */
-const r2 = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+const LOCAL_STORAGE_ROOT = path.join(process.cwd(), "storage", "uploads");
 
-const BUCKET = process.env.R2_BUCKET_NAME!;
+export function isR2Configured() {
+  return Boolean(
+    process.env.R2_ACCOUNT_ID &&
+      process.env.R2_ACCESS_KEY_ID &&
+      process.env.R2_SECRET_ACCESS_KEY &&
+      process.env.R2_BUCKET_NAME,
+  );
+}
 
-/**
- * Quy ước đặt key (đường dẫn file trong bucket) — xem ARCHITECTURE.md.
- * Ví dụ: documents/{classId}/{examId}/de.pdf
- */
-export function buildDocumentKey(params: {
-  classId: string;
+function getR2Client() {
+  if (!isR2Configured()) throw new Error("Cloudflare R2 chưa được cấu hình.");
+  return new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
+}
+
+function safeLocalPath(key: string) {
+  const normalized = path.posix.normalize(key).replace(/^\/+/, "");
+  if (normalized.startsWith("..") || !normalized.startsWith("exams/")) {
+    throw new Error("Storage key không hợp lệ.");
+  }
+  return path.join(LOCAL_STORAGE_ROOT, ...normalized.split("/"));
+}
+
+export function buildExamDocumentKey(params: {
   examId: string;
   filename: "de.pdf" | "dapan.pdf";
 }) {
-  return `documents/${params.classId}/${params.examId}/${params.filename}`;
+  return `exams/${params.examId}/${params.filename}`;
 }
 
-/** Upload 1 file (dùng trong Server Action khi admin tạo đề mới). */
-export async function uploadDocument(key: string, file: Buffer, contentType = "application/pdf") {
-  await r2.send(
+export async function uploadDocument(
+  key: string,
+  file: Buffer,
+  contentType = "application/pdf",
+) {
+  if (!isR2Configured()) {
+    const destination = safeLocalPath(key);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, file);
+    return key;
+  }
+  await getR2Client().send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: process.env.R2_BUCKET_NAME!,
       Key: key,
       Body: file,
       ContentType: contentType,
-    })
+    }),
   );
   return key;
 }
 
-/**
- * Tạo signed URL có thời hạn ngắn để HS xem file — KHÔNG trả link public
- * vĩnh viễn, tránh bị chia sẻ link ra ngoài lớp.
- * expiresInSeconds mặc định 5 phút, đủ để load PDF trong PdfViewer.
- */
+export async function readDocument(key: string): Promise<Uint8Array> {
+  if (!isR2Configured()) return readFile(safeLocalPath(key));
+  const result = await getR2Client().send(
+    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+  );
+  if (!result.Body) throw new Error("File không tồn tại.");
+  return result.Body.transformToByteArray();
+}
+
 export async function getSignedDocumentUrl(key: string, expiresInSeconds = 300) {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: key });
-  return getSignedUrl(r2, command, { expiresIn: expiresInSeconds });
+  if (!isR2Configured()) throw new Error("Signed URL chỉ dùng khi đã bật R2.");
+  return getSignedUrl(
+    getR2Client(),
+    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+    { expiresIn: expiresInSeconds },
+  );
 }
 
 export async function deleteDocument(key: string) {
-  await r2.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+  if (!isR2Configured()) {
+    await rm(safeLocalPath(key), { force: true });
+    return;
+  }
+  await getR2Client().send(
+    new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+  );
 }

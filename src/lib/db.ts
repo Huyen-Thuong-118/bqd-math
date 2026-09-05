@@ -28,7 +28,7 @@ function createPrismaClient() {
     // là tham số riêng của Prisma engine cũ) — phải giới hạn ở đây. Giữ
     // nhỏ vì đây là serverless: mỗi function instance nên chỉ giữ ít
     // connection, để pooler (PgBouncer/Neon pooler) lo phần scale ra
-    // nhiều instance. Xem SECURITY.md / ARCHITECTURE.md mục connection pooling.
+    // nhiều instance. Xem docs/security.md / docs/architecture.md.
     max: 3,
   });
   return new PrismaClient({ adapter });

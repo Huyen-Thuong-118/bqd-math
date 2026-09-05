@@ -5,6 +5,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { isGoogleAuthConfigured } from "@/features/auth/lib/google-auth";
 
 // `code` là phần LoginForm.tsx đọc lại từ `result.code` sau signIn() để chọn
 // đúng câu thông báo — KHÔNG đổi các chuỗi này mà không sửa luôn bên đó.
@@ -55,16 +56,19 @@ export const {
           // khẩu) — gộp chung 1 lỗi để không lộ tài khoản nào tồn tại.
           throw new InvalidCredentialsError();
         }
+        const isValid = await verifyPassword(password, user.passwordHash);
+        if (!isValid) {
+          throw new InvalidCredentialsError();
+        }
+
+        // Chỉ trả trạng thái tài khoản sau khi mật khẩu đã đúng. Nếu kiểm tra
+        // trước, người lạ có thể dò email/SĐT nào tồn tại và đang ở trạng thái
+        // gì chỉ bằng một mật khẩu bất kỳ.
         if (user.status === "PENDING") {
           throw new AccountPendingError();
         }
         if (user.status === "SUSPENDED") {
           throw new AccountSuspendedError();
-        }
-
-        const isValid = await verifyPassword(password, user.passwordHash);
-        if (!isValid) {
-          throw new InvalidCredentialsError();
         }
 
         return {
@@ -77,24 +81,20 @@ export const {
         };
       },
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
+    ...(isGoogleAuthConfigured()
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+            // Google chỉ trả email đã xác minh. Cho phép nối OAuth vào đúng
+            // tài khoản đã seed/đăng ký cùng email (đặc biệt là ADMIN), thay
+            // vì báo OAuthAccountNotLinked và tạo một tài khoản trùng.
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
   ],
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider === "google" && !user.studentPhone) {
-        // PrismaAdapter vừa tạo User mới chỉ từ email/name/image (Google
-        // không biết SĐT học sinh/phụ huynh) — vẫn cho đăng nhập theo yêu
-        // cầu, nhưng hồ sơ đang thiếu studentPhone/parentPhone.
-        // TODO: trang "hoàn tất hồ sơ" + redirect thật CHƯA làm ở task này
-        // (ngoài phạm vi được giao) — cần 1 task riêng để chặn user này
-        // khỏi các trang cần SĐT cho tới khi họ điền xong.
-        console.log(`Tài khoản Google mới cần hoàn tất hồ sơ: ${user.email}`);
-      }
-      return true;
-    },
     async jwt({ token, user }) {
       // `user` chỉ có ở lần đăng nhập đầu (từ authorize() hoặc từ Adapter) —
       // các lần refresh JWT sau đó chỉ có `token`.

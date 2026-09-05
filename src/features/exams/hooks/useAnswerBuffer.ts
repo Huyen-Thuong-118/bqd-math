@@ -5,88 +5,109 @@ import type { AnswerChange } from "../types";
 
 const FLUSH_INTERVAL_MS = 2500;
 
-/**
- * Hook quản lý việc chọn đáp án trong lúc thi.
- *
- * VÌ SAO CẦN HOOK NÀY (thay vì gọi API mỗi lần HS click chọn đáp án):
- * 500 HS thi cùng lúc, mỗi người đổi đáp án nhiều lần -> nếu ghi DB ngay
- * mỗi click sẽ tạo hàng nghìn request/giây dồn vào cùng lúc, dễ làm cạn
- * connection pool. Hook này:
- *   1. Cập nhật UI NGAY LẬP TỨC (không đợi server) — lịch sử hiện dưới
- *      câu hỏi vẫn đúng yêu cầu, chỉ là lưu server trễ vài giây.
- *   2. Gộp nhiều lần đổi đáp án thành 1 request, gửi mỗi ~2.5s.
- *   3. Dùng navigator.sendBeacon khi HS đóng tab / chuyển tab để không
- *      mất dữ liệu chưa kịp flush theo lịch.
- *
- * Xem ARCHITECTURE.md mục "500 người thi cùng lúc" để biết lý do thiết kế.
- */
-export function useAnswerBuffer(attemptId: string) {
-  // Đáp án hiện tại của từng câu — dùng render UI (câu nào đã chọn gì)
-  const [answers, setAnswers] = useState<Record<number, string>>({});
-  // Toàn bộ lịch sử đổi đáp án — dùng render <AnswerHistory /> ngay lập tức
-  const [history, setHistory] = useState<AnswerChange[]>([]);
+export type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
-  // Hàng đợi các thay đổi CHƯA gửi lên server — không dùng state vì không
-  // cần re-render khi hàng đợi đổi, chỉ cần đọc lúc flush.
+export function useAnswerBuffer(
+  attemptId: string,
+  initialAnswers: Record<number, string>,
+  initialHistory: AnswerChange[],
+) {
+  const [answers, setAnswers] = useState<Record<number, string>>(initialAnswers);
+  const [history, setHistory] = useState<AnswerChange[]>(initialHistory);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const pendingRef = useRef<AnswerChange[]>([]);
+  const flushingRef = useRef<Promise<boolean> | null>(null);
 
-  const flush = useCallback(
-    (useBeacon = false) => {
-      if (pendingRef.current.length === 0) return;
+  const flush = useCallback(async (): Promise<boolean> => {
+    if (flushingRef.current) return flushingRef.current;
+    if (pendingRef.current.length === 0) return true;
 
-      const payload = JSON.stringify({
-        attemptId,
-        changes: pendingRef.current,
+    const changes = pendingRef.current.splice(0);
+    setSaveStatus("saving");
+    const request = fetch(`/api/exams/attempts/${attemptId}/answers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attemptId, changes }),
+      keepalive: true,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? "Không thể lưu đáp án.");
+        }
+        setSaveStatus(pendingRef.current.length ? "unsaved" : "saved");
+        return true;
+      })
+      .catch(() => {
+        // Đưa batch lỗi về đầu hàng đợi, giữ đúng thứ tự trước các click mới.
+        pendingRef.current = [...changes, ...pendingRef.current];
+        setSaveStatus("error");
+        return false;
+      })
+      .finally(() => {
+        flushingRef.current = null;
       });
-      pendingRef.current = [];
 
-      const url = `/api/exams/attempts/${attemptId}/answers`;
+    flushingRef.current = request;
+    return request;
+  }, [attemptId]);
 
-      if (useBeacon && navigator.sendBeacon) {
-        // sendBeacon: gửi "cố gắng tốt nhất", không chờ phản hồi — an toàn
-        // khi gọi lúc trang đang đóng (fetch thường bị trình duyệt huỷ giữa chừng).
-        navigator.sendBeacon(url, new Blob([payload], { type: "application/json" }));
-      } else {
-        fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: payload,
-          keepalive: true, // giữ request sống thêm chút nếu trang đang chuyển hướng
-        }).catch(() => {
-          // TODO: nếu fail, đẩy lại vào pendingRef để thử ở lần flush sau
-        });
-      }
+  useEffect(() => {
+    const interval = window.setInterval(() => void flush(), FLUSH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [flush]);
+
+  useEffect(() => {
+    function flushWithBeacon() {
+      if (pendingRef.current.length === 0 || !navigator.sendBeacon) return;
+      const changes = pendingRef.current;
+      const sent = navigator.sendBeacon(
+        `/api/exams/attempts/${attemptId}/answers`,
+        new Blob([JSON.stringify({ attemptId, changes })], {
+          type: "application/json",
+        }),
+      );
+      if (sent) pendingRef.current = [];
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "hidden") flushWithBeacon();
+    }
+
+    window.addEventListener("pagehide", flushWithBeacon);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flushWithBeacon);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [attemptId]);
+
+  const selectAnswer = useCallback(
+    (questionNumber: number, selectedAnswer: string) => {
+      const change: AnswerChange = {
+        questionNumber,
+        selectedAnswer,
+        changedAt: new Date().toISOString(),
+      };
+      setAnswers((current) => ({ ...current, [questionNumber]: selectedAnswer }));
+      setHistory((current) => [...current, change]);
+      pendingRef.current.push(change);
+      setSaveStatus("unsaved");
     },
-    [attemptId]
+    [],
   );
 
-  // Flush định kỳ mỗi FLUSH_INTERVAL_MS
-  useEffect(() => {
-    const interval = setInterval(() => flush(false), FLUSH_INTERVAL_MS);
-    return () => clearInterval(interval);
+  const flushAll = useCallback(async () => {
+    // Một request có thể đang chạy trong lúc user vừa chọn thêm đáp án.
+    // Lặp cho tới khi hàng đợi rỗng để nút Nộp không vượt qua click cuối.
+    while (flushingRef.current || pendingRef.current.length > 0) {
+      const saved = await flush();
+      if (!saved) return false;
+    }
+    return true;
   }, [flush]);
 
-  // Flush khi HS rời trang / chuyển tab — tránh mất đáp án chưa kịp lưu
-  useEffect(() => {
-    const handleUnload = () => flush(true);
-    window.addEventListener("pagehide", handleUnload);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "hidden") flush(true);
-    });
-    return () => window.removeEventListener("pagehide", handleUnload);
-  }, [flush]);
-
-  const selectAnswer = useCallback((questionNumber: number, selectedAnswer: string) => {
-    const change: AnswerChange = {
-      questionNumber,
-      selectedAnswer,
-      changedAt: new Date().toISOString(),
-    };
-
-    setAnswers((prev) => ({ ...prev, [questionNumber]: selectedAnswer }));
-    setHistory((prev) => [...prev, change]);
-    pendingRef.current.push(change);
-  }, []);
-
-  return { answers, history, selectAnswer, flushNow: () => flush(false) };
+  return { answers, history, selectAnswer, flushNow: flushAll, saveStatus };
 }

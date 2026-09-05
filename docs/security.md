@@ -34,16 +34,15 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
 
 ## 3. Kiểm soát truy cập (Authorization)
 
-- [ ] **Việc cần làm gấp nhất còn lại:** API route
-      `app/api/exams/attempts/[attemptId]/answers/route.ts` hiện CHƯA kiểm
-      tra `attemptId` có thuộc về user đang đăng nhập không — ai biết được
-      1 `attemptId` (dù đoán mò) đều ghi được đáp án vào đó. Phải thêm
-      session check trước khi ghi, ngay khi NextAuth xong.
+- [x] API autosave kiểm tra session, account `ACTIVE`, ownership của attempt,
+      deadline, trạng thái chưa nộp và số câu hợp lệ trước khi ghi.
 - [x] Proxy (`src/proxy.ts`, trước gọi là Middleware) chặn toàn bộ `/admin/**`
       nếu `role !== "ADMIN"`, và `/lop-hoc|/on-tap|/thi-thu|/tai-lieu` nếu
-      chưa đăng nhập hoặc status PENDING/SUSPENDED.
-- [ ] HS chỉ query được lớp/đề của chính lớp mình — kiểm tra ở tầng
-      `features/*/queries.ts`, không tin tưởng dữ liệu gửi từ client.
+      chưa đăng nhập, thiếu hồ sơ, phải đổi mật khẩu hoặc status
+      PENDING/SUSPENDED. Server action quản trị kiểm tra lại quyền và trạng
+      thái trực tiếp từ DB, không dựa riêng vào Proxy/JWT.
+- [x] Danh sách/trang làm bài chỉ query đề được gán vào lớp của chính học sinh;
+      kết quả yêu cầu đúng `userId + examId + attemptId`.
 
 ## 4. Secrets
 

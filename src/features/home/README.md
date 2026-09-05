@@ -6,7 +6,7 @@ lịch lớp Cơ bản / Nâng cao trong tuần.
 Tách riêng thay vì nhét vào `features/classes` vì đây là UI **trang giới thiệu**
 (marketing/landing), không dính tới nghiệp vụ quản lý lớp — HS/GV không thao
 tác gì trên đó. `app/(public)/page.tsx` chỉ ráp 2 component lại, đúng nguyên
-tắc "app/ chỉ lo routing" trong ARCHITECTURE.md.
+tắc "app/ chỉ lo routing" trong `docs/architecture.md`.
 
 **Đang có:**
 

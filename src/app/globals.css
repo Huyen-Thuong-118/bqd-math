@@ -44,6 +44,12 @@
   --color-nav: #f0f3fa;
 }
 
+@media print {
+  .protected-pdf {
+    display: none !important;
+  }
+}
+
 @theme inline {
   --color-navy-50: var(--color-navy-50);
   --color-navy-100: var(--color-navy-100);

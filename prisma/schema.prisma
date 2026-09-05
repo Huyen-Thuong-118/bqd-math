@@ -53,7 +53,7 @@ model User {
   // CHỈ lưu hash 1 chiều (bcrypt) — KHÔNG BAO GIỜ lưu mật khẩu dạng đọc/giải
   // mã ngược được, kể cả để admin "xem lại". Admin cần hỗ trợ HS quên mật
   // khẩu thì dùng chức năng RESET (sinh mật khẩu tạm mới), không phải xem
-  // lại mật khẩu cũ. Xem lib/password.ts và SECURITY.md.
+  // lại mật khẩu cũ. Xem lib/password.ts và docs/security.md.
   // Nullable vì tài khoản đăng ký bằng Google (GoogleAuthButton) có thể chưa
   // từng đặt mật khẩu.
   passwordHash String?
@@ -233,6 +233,9 @@ model Exam {
   id    String @id @default(cuid())
   title String
 
+  // MOCK có đồng hồ; PRACTICE không giới hạn thời gian. Lát cắt 1 dùng MOCK.
+  mode ExamMode @default(MOCK)
+
   // DEPRECATED: dùng examLinks (ExamClass, N-N) thay cho quan hệ 1-N đơn này
   // — giữ tạm vì đã tồn tại từ code cũ, hiện KHÔNG có nơi nào trong src/
   // reference classId/class của Exam (đã grep xác nhận), nhưng để bạn tự
@@ -260,9 +263,35 @@ model Exam {
 
   attempts  ExamAttempt[]
   examLinks ExamClass[] // N-N với Class — cách gán đề vào lớp MỚI, xem ExamClass
+  questions ExamQuestion[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Câu hỏi có cấu trúc để server chấm được. correctAnswer TUYỆT ĐỐI không
+// select vào DTO trang làm bài; chỉ grading service phía server được đọc.
+model ExamQuestion {
+  id            String  @id @default(cuid())
+  examId        String
+  exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  number        Int
+  type          ExamQuestionType @default(MULTIPLE_CHOICE)
+  content       String
+  options       Json
+  correctAnswer String
+  points        Float   @default(1)
+  explanation   String?
+
+  finalizedAnswers AttemptAnswer[]
+
+  @@unique([examId, number])
+}
+
+enum ExamQuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
 }
 
 // N-N Exam <-> Class — 1 đề gán được cho nhiều lớp, 1 lớp có nhiều đề.
@@ -282,20 +311,48 @@ enum ExamMode {
 }
 
 model ExamAttempt {
-  id     String   @id @default(cuid())
-  examId String
-  userId String
-  exam   Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mode   ExamMode
+  id      String   @id @default(cuid())
+  examId  String
+  userId  String
+  // Unique khi attempt đang mở; set null lúc nộp. PostgreSQL cho phép nhiều
+  // null trong unique index nên lịch sử nhiều lượt vẫn hợp lệ.
+  openKey String?  @unique
+  exam    Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mode    ExamMode
 
   score       Float?
   startedAt   DateTime  @default(now())
+  expiresAt   DateTime?
   submittedAt DateTime?
 
-  answers AnswerHistory[]
+  correctCount    Int?
+  incorrectCount  Int?
+  unansweredCount Int?
+
+  answers          AnswerHistory[]
+  finalizedAnswers AttemptAnswer[]
 
   @@index([examId, userId])
+}
+
+// Snapshot được tạo đúng một lần lúc nộp. Kết quả không đọc lại answer key
+// hiện tại để tránh điểm/lời giải lịch sử tự đổi khi giáo viên sửa đề.
+model AttemptAnswer {
+  id             String       @id @default(cuid())
+  attemptId      String
+  attempt        ExamAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  questionNumber Int
+  selectedAnswer String?
+  correctAnswer  String
+  isCorrect      Boolean
+  pointsAwarded  Float
+  pointsPossible Float
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId, questionNumber])
 }
 
 // Lưu MỌI lần đổi đáp án — không ghi đè, để hiển thị lịch sử đầy đủ.

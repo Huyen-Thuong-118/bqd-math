@@ -33,7 +33,7 @@ type FieldName =
 
 type FormErrors = Partial<Record<FieldName, string>>;
 
-export function RegisterForm() {
+export function RegisterForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [fullName, setFullName] = useState("");
   const [studentPhone, setStudentPhone] = useState("");
   const [parentPhone, setParentPhone] = useState("");
@@ -318,7 +318,7 @@ export function RegisterForm() {
         <span className="h-px flex-1 bg-navy-100" />
       </div>
 
-      <GoogleAuthButton label="Đăng ký bằng Google" />
+      <GoogleAuthButton label="Đăng ký bằng Google" enabled={googleEnabled} />
 
       <p className="text-center text-sm text-navy-400">
         Đã có tài khoản?{" "}

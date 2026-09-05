@@ -8,6 +8,7 @@ import {
   approveAccount,
   reactivateAccount,
   rejectAccount,
+  resetStudentPassword,
   revokeAccount,
 } from "../actions";
 import type { AccountFilter, StudentAccount } from "../types";
@@ -32,6 +33,10 @@ export function AccountsPage({
   const [search, setSearch] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [resetResult, setResetResult] = useState<{
+    accountName: string;
+    temporaryPassword: string;
+  }>();
   const [, startTransition] = useTransition();
   // id của account đang có action chạy dở — cho phép chỉ disable/hiện loading
   // đúng NÚT đó thay vì khoá cả bảng, đồng thời chặn double-click trên chính
@@ -109,6 +114,23 @@ export function AccountsPage({
     });
   }
 
+  function handleResetPassword(account: StudentAccount) {
+    setErrorMessage(undefined);
+    setPendingId(account.id);
+    startTransition(async () => {
+      const result = await resetStudentPassword(account.id);
+      setPendingId(null);
+      if (!result.success) {
+        setErrorMessage(result.error);
+        return;
+      }
+      setResetResult({
+        accountName: account.name,
+        temporaryPassword: result.temporaryPassword,
+      });
+    });
+  }
+
   function handleConfirmPendingAction() {
     if (!pendingAction) return;
     const { type, account } = pendingAction;
@@ -169,7 +191,40 @@ export function AccountsPage({
         onReject={(account) => setPendingAction({ type: "reject", account })}
         onSuspend={(account) => setPendingAction({ type: "suspend", account })}
         onReactivate={handleReactivate}
+        onResetPassword={handleResetPassword}
       />
+
+      {resetResult && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="temporary-password-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/45 px-4"
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <h2
+              id="temporary-password-title"
+              className="text-lg font-semibold text-navy-600"
+            >
+              Mật khẩu tạm của {resetResult.accountName}
+            </h2>
+            <p className="mt-2 text-sm text-navy-400">
+              Sao chép và gửi riêng cho học sinh. Mật khẩu này chỉ hiện ở đây
+              một lần; học sinh sẽ phải đổi ngay sau khi đăng nhập.
+            </p>
+            <code className="mt-4 block select-all rounded-2xl bg-pastel-100 px-4 py-3 text-center text-lg font-semibold tracking-wider text-navy-600">
+              {resetResult.temporaryPassword}
+            </code>
+            <button
+              type="button"
+              onClick={() => setResetResult(undefined)}
+              className="mt-5 w-full rounded-full bg-navy-600 px-5 py-2.5 text-sm font-semibold text-white"
+            >
+              Tôi đã lưu mật khẩu
+            </button>
+          </div>
+        </div>
+      )}
 
       <ConfirmActionDialog
         open={pendingAction !== null}

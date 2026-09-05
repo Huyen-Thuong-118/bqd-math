@@ -15,8 +15,16 @@ tập theo chương, phòng thi thử có chấm điểm.
 
 ## Cấu trúc thư mục
 
-Xem chi tiết logic tổ chức trong [`ARCHITECTURE.md`](./ARCHITECTURE.md).
-Xem checklist bảo mật (bắt buộc đọc trước khi public) trong [`SECURITY.md`](./SECURITY.md).
+Xem chi tiết logic tổ chức trong [`docs/architecture.md`](./docs/architecture.md).
+Xem phạm vi sản phẩm và roadmap trong
+[`docs/product-blueprint.md`](./docs/product-blueprint.md).
+Xem phần đã triển khai cho lát cắt 0 trong
+[`docs/implementation-slice-0.md`](./docs/implementation-slice-0.md).
+Luồng làm bài end-to-end nằm tại
+[`docs/implementation-slice-1.md`](./docs/implementation-slice-1.md).
+Upload PDF và phiếu tô nằm tại
+[`docs/implementation-slice-2.md`](./docs/implementation-slice-2.md).
+Xem checklist bảo mật trong [`docs/security.md`](./docs/security.md) trước khi public.
 
 ```
 src/
@@ -25,8 +33,10 @@ src/
 ├── components/   # UI dùng chung (ui/, layout/)
 ├── lib/          # Tiện ích kỹ thuật (db, auth config, helpers)
 └── types/        # Type dùng chung toàn app
-prisma/
-└── schema.prisma # Toàn bộ data model
+docs/              # Kiến trúc, bảo mật và tài liệu kỹ thuật
+infra/             # Dịch vụ local (Docker Compose)
+prisma/            # Schema, migration và seed database
+public/            # File tĩnh
 ```
 
 Mỗi thư mục trong `features/` có 1 file `README.md` ngắn giải thích phạm vi —
@@ -34,17 +44,40 @@ mở thư mục nào là biết ngay thư mục đó làm gì.
 
 ## Bắt đầu chạy project
 
-### 1. Cài dependencies
-
-```bash
-npm install
-```
-
-### 2. Tạo file môi trường
+### 1. Tạo file môi trường
 
 ```bash
 cp .env.example .env
 ```
+
+Prisma đọc `DIRECT_URL` ngay trong bước `postinstall`, vì vậy cần tạo và điền
+`.env` trước khi cài dependencies.
+
+### 2. Chọn database
+
+#### Phát triển độc lập bằng Docker (khuyến nghị cho local)
+
+Repo có sẵn PostgreSQL 16 trong `infra/docker-compose.yml`. Dùng script npm
+để không phải nhớ đường dẫn file hạ tầng:
+
+```bash
+npm run db:up
+```
+
+Với local, dùng cùng một URL cho cả app và Prisma CLI:
+
+```env
+DATABASE_URL="postgresql://bqdmath:bqdmath_dev@127.0.0.1:5432/bqdmath"
+DIRECT_URL="postgresql://bqdmath:bqdmath_dev@127.0.0.1:5432/bqdmath"
+```
+
+Database và volume này chỉ nằm trên máy hiện tại; cổng PostgreSQL chỉ bind
+vào `127.0.0.1`, không mở ra LAN/Internet.
+
+Lệnh này cũng khởi động OCR local ở `127.0.0.1:8001` (PyMuPDF + Tesseract
+`vie+eng`). Không cần API key; dữ liệu PDF không rời máy.
+
+#### Neon hoặc Supabase
 
 Cần điền các mục sau — xem chú thích chi tiết ngay trong `.env.example`:
 
@@ -57,10 +90,16 @@ Cần điền các mục sau — xem chú thích chi tiết ngay trong `.env.exa
 - **`R2_*`** — tạo bucket ở Cloudflare Dashboard → R2, tạo API token
 - **`CLOUDFLARE_*`** — cần Cloudflare Workers Paid plan ($5/tháng) để dùng Stream
 
-### 3. Khởi tạo database
+### 3. Cài dependencies
 
 ```bash
-npx prisma migrate dev --name init
+npm install
+```
+
+### 4. Khởi tạo database
+
+```bash
+npm run db:migrate
 ```
 
 Lệnh này tạo bảng trong DB theo `prisma/schema.prisma` + tự chạy
@@ -79,13 +118,31 @@ báo connection string trong `schema.prisma` nữa. Giờ tách làm 2 nơi:
 Nếu quên điền 1 trong 2 biến ở `.env`, sẽ gặp lỗi rõ ràng ngay khi chạy
 lệnh tương ứng — điền đủ cả 2 trước khi chạy bước 3.
 
-### 4. Chạy dev server
+### 5. Tạo tài khoản admin local (tuỳ chọn)
+
+Điền `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PHONE`, `SEED_ADMIN_PASSWORD` trong
+`.env`, sau đó chạy:
+
+```bash
+npm run seed
+```
+
+### 6. Chạy dev server
 
 ```bash
 npm run dev
 ```
 
 Mở [http://localhost:3000](http://localhost:3000).
+
+### 7. Bật đăng nhập Google (tuỳ chọn)
+
+Tạo Google OAuth Client loại **Web application**, thêm origin
+`http://localhost:3000` và redirect URI
+`http://localhost:3000/api/auth/callback/google`, rồi điền
+`GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` trong `.env`. Khởi động lại dev
+server sau khi đổi biến môi trường. Xem đầy đủ luồng và checklist kiểm thử tại
+[`docs/implementation-slice-0.md`](./docs/implementation-slice-0.md).
 
 ### Các lệnh hữu ích khác
 
@@ -94,18 +151,22 @@ Mở [http://localhost:3000](http://localhost:3000).
 | `npm run db:studio` | Mở Prisma Studio — xem/sửa data trực quan như Excel |
 | `npm run lint` | Kiểm tra lỗi code style |
 | `npm run build` | Build production (kiểm tra lỗi trước khi deploy) |
+| `npm run verify:slice-0` | Kiểm tra tự động auth/trạng thái trên DB local (cần dev server) |
+| `npm run verify:slice-1` | Kiểm tra ownership, autosave, chấm điểm và kết quả (cần seed + dev server) |
+| `npm run verify:slice-2` | Kiểm tra quyền PDF, download và lời giải (cần dev server) |
+| `npm run seed:samples` | Import cặp PDF số 1 trong `data/` thành đề mẫu 12–4–6 |
 
 ## Bước tiếp theo (chưa làm trong lần setup này)
 
 - [x] Connection pooling cho Prisma (`directUrl` trong schema + hướng dẫn `.env`)
 - [x] Client lưu trữ R2 (`lib/storage.ts`) + Cloudflare Stream (`lib/stream.ts`)
 - [x] Cơ chế batch-save đáp án chống nghẽn DB (`features/exams/hooks/useAnswerBuffer.ts`)
-- [x] Mật khẩu hash 1 chiều, admin không xem lại được (`lib/password.ts`) — xem `SECURITY.md`
-- [ ] **Ưu tiên cao:** thêm session check vào API route lưu đáp án (đang mở, ai biết attemptId cũng ghi được — xem SECURITY.md mục 3)
+- [x] Mật khẩu hash 1 chiều, admin không xem lại được (`lib/password.ts`) — xem `docs/security.md`
+- [x] Session + ownership + deadline cho API route autosave đáp án
 - [x] Cài & cấu hình NextAuth trong `src/auth.ts` — Credentials + Google, session JWT, gate route ở `src/proxy.ts`
 - [ ] Chạy `npx shadcn@latest init` để thêm UI components vào `components/ui/`
-- [ ] `PdfViewer.tsx` — render PDF qua signed URL, có watermark tên HS
-- [ ] `AnswerSheet.tsx` + `ExamTimer.tsx` — ghép UI thật vào `useAnswerBuffer`
+- [x] `PdfViewer.tsx` — render PDF canvas qua API có kiểm tra quyền, zoom và watermark
+- [x] UI làm 10 câu + `ExamTimer` + autosave/reload + nộp/chấm/kết quả
 - [ ] Viết logic thật trong các `features/*/actions.ts` và `queries.ts` còn lại
 - [ ] Load test 500 concurrent bằng k6 trước khi dùng thi thật
 - [ ] Deploy lên [Vercel](https://vercel.com) — connect thẳng repo GitHub này
