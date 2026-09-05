@@ -45,8 +45,9 @@ Khi đủ bốn biến `R2_*`, file lưu private trên Cloudflare R2. Khi local 
 R2, file lưu ở `storage/uploads/` (đã gitignore) để chạy độc lập ngay. Cả hai
 backend dùng chung key và API quyền nên không đổi giao diện khi chuyển môi trường.
 
-Server Action hiện nhận tối đa 42 MB để chứa hai file 20 MB. Khi production có
-nhiều upload đồng thời nên đổi sang presigned direct upload R2.
+PDF production được upload trực tiếp từ trình duyệt lên R2 bằng presigned URL;
+Server Action chỉ nhận storage key và metadata nhỏ. Server kiểm tra quyền admin,
+kích thước object, Content-Type và magic bytes `%PDF-` trước khi lưu vào database.
 
 ## Chấm điểm và giới hạn hiện tại
 

@@ -28,6 +28,8 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
 - [x] Kết nối DB luôn qua TLS (`sslmode=require` có sẵn trong connection
       string Neon/Supabase mẫu ở `.env.example`).
 - [x] Deploy trên Vercel → HTTPS bắt buộc, tự động, miễn phí (Let's Encrypt).
+- [x] CSP, HSTS, chống MIME sniffing/clickjacking và Permissions Policy được
+      cấu hình tập trung trong `next.config.ts`.
 - [x] File PDF/video không có link public vĩnh viễn — signed URL hết hạn
       ngắn (`lib/storage.ts`, `lib/stream.ts`).
 - [ ] Bật domain `.edu.vn` với HTTPS ngay từ đầu, không public bản HTTP.

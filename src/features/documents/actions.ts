@@ -9,6 +9,7 @@ import {
   buildLearningAnswerKey,
   buildLearningDocumentKey,
   deleteDocument as deleteStoredFile,
+  getDocumentMetadata,
   getSignedUploadUrl,
   isR2Configured,
   uploadDocument,
@@ -48,6 +49,16 @@ async function activeClassIds(rawIds: string[]) {
   const ids = [...new Set(rawIds.filter(Boolean))];
   const count = await db.class.count({ where: { id: { in: ids }, status: "ACTIVE" } });
   return count === ids.length ? ids : null;
+}
+
+async function validStoredUpload(key: string, expectedContentType?: string) {
+  const metadata = await getDocumentMetadata(key);
+  if (metadata.size <= 0 || metadata.size > MAX_FILE_BYTES) return false;
+  return !(
+    expectedContentType &&
+    metadata.contentType &&
+    metadata.contentType !== expectedContentType
+  );
 }
 
 export async function prepareDocumentUpload(
@@ -96,6 +107,7 @@ export async function createDocument(formData: FormData): Promise<Result> {
     let contentType = text(formData, "contentType") || "application/octet-stream";
     if (directKey) {
       if (!directKey.startsWith(`documents/${documentId}/v1/`)) return { success: false, error: "Storage key không hợp lệ." };
+      if (!(await validStoredUpload(directKey, contentType))) return { success: false, error: "File upload không tồn tại hoặc không hợp lệ." };
       uploadedFileKey = directKey;
     } else {
       const error = validFile(file);
@@ -107,6 +119,7 @@ export async function createDocument(formData: FormData): Promise<Result> {
     }
     if (directAnswerKey) {
       if (!directAnswerKey.startsWith(`documents/${documentId}/answer/`)) return { success: false, error: "Storage key đáp án không hợp lệ." };
+      if (!(await validStoredUpload(directAnswerKey))) return { success: false, error: "File đáp án upload không tồn tại hoặc không hợp lệ." };
       uploadedAnswerKey = directAnswerKey;
     } else if (answer instanceof File && answer.size > 0) {
       const error = validFile(answer, false);
@@ -170,6 +183,7 @@ export async function replaceDocumentFile(documentId: string, formData: FormData
     let contentType = text(formData, "contentType") || "application/octet-stream";
     if (directKey) {
       if (!directKey.startsWith(`documents/${documentId}/v${version}/`)) return { success: false, error: "Storage key không hợp lệ." };
+      if (!(await validStoredUpload(directKey, contentType))) return { success: false, error: "File upload không tồn tại hoặc không hợp lệ." };
       key = directKey;
     } else {
       const error = validFile(file);

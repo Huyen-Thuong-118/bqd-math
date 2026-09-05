@@ -8,6 +8,11 @@ import {
   buildExamDocumentKey,
   buildExamRevisionKey,
   deleteDocument,
+  getDocumentMetadata,
+  getSignedUploadUrl,
+  isR2Configured,
+  readDocument,
+  readDocumentPrefix,
   uploadDocument,
 } from "@/lib/storage";
 import { requireActiveAdminId } from "./admin";
@@ -33,6 +38,9 @@ type AnalyzeResult =
       answerDetectedCount: number;
       analysisSource: "GEMINI" | "OCR_FALLBACK";
     }
+  | { success: false; error: string };
+type UploadTargetResult =
+  | { success: true; key: string; uploadUrl: string }
   | { success: false; error: string };
 
 function text(formData: FormData, key: string) {
@@ -99,23 +107,136 @@ function validatePdf(value: FormDataEntryValue | null, required: boolean) {
   return null;
 }
 
+function validUploadId(value: string) {
+  return /^[a-z0-9-]{10,100}$/i.test(value);
+}
+
+function isExpectedExamKey(key: string, examId: string, kind: "exam" | "answer", revision = false) {
+  const stem = kind === "exam" ? "de" : "dapan";
+  if (!revision) return key === `exams/${examId}/${stem}.pdf`;
+  const prefix = `exams/${examId}/${stem}-`;
+  if (!key.startsWith(prefix) || !key.endsWith(".pdf")) return false;
+  return validUploadId(key.slice(prefix.length, -4));
+}
+
+async function verifyStoredPdf(key: string) {
+  const [metadata, prefix] = await Promise.all([
+    getDocumentMetadata(key),
+    readDocumentPrefix(key, 5),
+  ]);
+  if (metadata.size <= 0 || metadata.size > MAX_PDF_BYTES) {
+    throw new Error("File PDF rỗng hoặc vượt quá 20 MB.");
+  }
+  if (metadata.contentType && metadata.contentType !== "application/pdf") {
+    throw new Error("File tải lên không có định dạng PDF.");
+  }
+  if (!Buffer.from(prefix).equals(Buffer.from("%PDF-"))) {
+    throw new Error("Nội dung file tải lên không phải PDF hợp lệ.");
+  }
+}
+
+export async function prepareExamUpload(
+  examId: string,
+  kind: "exam" | "answer",
+  fileName: string,
+  fileSize: number,
+  revisionId?: string,
+): Promise<UploadTargetResult> {
+  try {
+    await requireActiveAdminId();
+    if (!isR2Configured()) {
+      return { success: false, error: "Cloudflare R2 chưa được cấu hình đầy đủ." };
+    }
+    if (
+      !validUploadId(examId) ||
+      (revisionId !== undefined && !validUploadId(revisionId)) ||
+      !fileName.toLowerCase().endsWith(".pdf") ||
+      !Number.isFinite(fileSize) ||
+      fileSize <= 0 ||
+      fileSize > MAX_PDF_BYTES
+    ) {
+      return { success: false, error: "Thông tin file PDF không hợp lệ." };
+    }
+    const existing = await db.exam.findUnique({ where: { id: examId }, select: { id: true } });
+    if (revisionId && !existing) return { success: false, error: "Không tìm thấy đề thi." };
+    if (!revisionId && existing) return { success: false, error: "Mã đề tải lên đã tồn tại." };
+    const key = revisionId
+      ? buildExamRevisionKey({ examId, kind: kind === "exam" ? "de" : "dapan", revisionId })
+      : buildExamDocumentKey({ examId, filename: kind === "exam" ? "de.pdf" : "dapan.pdf" });
+    const uploadUrl = await getSignedUploadUrl(key, "application/pdf");
+    return { success: true, key, uploadUrl };
+  } catch (error) {
+    console.error("prepareExamUpload thất bại:", error);
+    return { success: false, error: "Không thể tạo đường dẫn upload an toàn." };
+  }
+}
+
+export async function discardExamUpload(examId: string, key: string): Promise<SimpleResult> {
+  try {
+    await requireActiveAdminId();
+    if (
+      !validUploadId(examId) ||
+      !(
+        isExpectedExamKey(key, examId, "exam") ||
+        isExpectedExamKey(key, examId, "answer") ||
+        isExpectedExamKey(key, examId, "exam", true) ||
+        isExpectedExamKey(key, examId, "answer", true)
+      )
+    ) {
+      return { success: false, error: "Đường dẫn file cần dọn dẹp không hợp lệ." };
+    }
+    const referenced = await db.exam.findFirst({
+      where: { OR: [{ examFileUrl: key }, { answerFileUrl: key }] },
+      select: { id: true },
+    });
+    if (referenced) return { success: false, error: "File đang được một đề thi sử dụng." };
+    await deleteDocument(key);
+    return { success: true };
+  } catch (error) {
+    console.error("discardExamUpload thất bại:", error);
+    return { success: false, error: "Không thể dọn dẹp file upload." };
+  }
+}
+
 export async function analyzeExamPdf(formData: FormData): Promise<AnalyzeResult> {
   try {
     await requireActiveAdminId();
     const file = formData.get("examPdf");
     const answerFile = formData.get("answerPdf");
-    const error = validatePdf(file, true);
-    if (error || !(file instanceof File)) {
-      return { success: false, error: error ?? "File đề không hợp lệ." };
+    const examKey = text(formData, "examPdfKey");
+    const answerStorageKey = text(formData, "answerPdfKey");
+    const examId = text(formData, "examId");
+    let bytes: Buffer;
+    let examFileName = "de.pdf";
+    if (examKey) {
+      if (!validUploadId(examId) || !isExpectedExamKey(examKey, examId, "exam")) {
+        return { success: false, error: "Đường dẫn file đề không hợp lệ." };
+      }
+      await verifyStoredPdf(examKey);
+      bytes = Buffer.from(await readDocument(examKey));
+    } else {
+      const error = validatePdf(file, true);
+      if (error || !(file instanceof File)) {
+        return { success: false, error: error ?? "File đề không hợp lệ." };
+      }
+      examFileName = file.name;
+      bytes = Buffer.from(await file.arrayBuffer());
+      if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+        return { success: false, error: "File đề không phải PDF hợp lệ." };
+      }
     }
-    const bytes = Buffer.from(await file.arrayBuffer());
-    if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
-      return { success: false, error: "File đề không phải PDF hợp lệ." };
-    }
-    const answerError = validatePdf(answerFile, false);
-    if (answerError) return { success: false, error: answerError };
     let answerBytes: Buffer | undefined;
-    if (answerFile instanceof File && answerFile.size > 0) {
+    let answerFileName = "dapan.pdf";
+    if (answerStorageKey) {
+      if (!validUploadId(examId) || !isExpectedExamKey(answerStorageKey, examId, "answer")) {
+        return { success: false, error: "Đường dẫn file lời giải không hợp lệ." };
+      }
+      await verifyStoredPdf(answerStorageKey);
+      answerBytes = Buffer.from(await readDocument(answerStorageKey));
+    } else if (answerFile instanceof File && answerFile.size > 0) {
+      const answerError = validatePdf(answerFile, false);
+      if (answerError) return { success: false, error: answerError };
+      answerFileName = answerFile.name;
       answerBytes = Buffer.from(await answerFile.arrayBuffer());
       if (!answerBytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
         return { success: false, error: "File lời giải không phải PDF hợp lệ." };
@@ -158,10 +279,20 @@ export async function analyzeExamPdf(formData: FormData): Promise<AnalyzeResult>
       geminiError = "Chưa cấu hình GEMINI_API_KEY.";
     }
 
+    const ocrServiceUrl = process.env.OCR_SERVICE_URL?.trim();
+    const localOcrUnavailable =
+      !ocrServiceUrl || /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(ocrServiceUrl);
+    if (process.env.NODE_ENV === "production" && localOcrUnavailable) {
+      return {
+        success: false,
+        error: `${geminiError ?? "Gemini không xử lý được PDF"} Không có dịch vụ OCR dự phòng trên production.`,
+      };
+    }
+
     const payload = new FormData();
-    payload.set("file", new Blob([bytes], { type: "application/pdf" }), file.name);
+    payload.set("file", new Blob([new Uint8Array(bytes)], { type: "application/pdf" }), examFileName);
     const response = await fetch(
-      `${process.env.OCR_SERVICE_URL ?? "http://127.0.0.1:8001"}/analyze`,
+      `${ocrServiceUrl || "http://127.0.0.1:8001"}/analyze`,
       { method: "POST", body: payload, signal: AbortSignal.timeout(120_000) },
     );
     const result = (await response.json().catch(() => null)) as
@@ -178,15 +309,15 @@ export async function analyzeExamPdf(formData: FormData): Promise<AnalyzeResult>
 
     let answerKey: string[] | null = null;
     let answerDetectedCount = 0;
-    if (answerBytes && answerFile instanceof File) {
+    if (answerBytes) {
       const answerPayload = new FormData();
       answerPayload.set(
         "file",
         new Blob([new Uint8Array(answerBytes)], { type: "application/pdf" }),
-        answerFile.name,
+        answerFileName,
       );
       const answerResponse = await fetch(
-        `${process.env.OCR_SERVICE_URL ?? "http://127.0.0.1:8001"}/analyze-answer`,
+        `${ocrServiceUrl || "http://127.0.0.1:8001"}/analyze-answer`,
         { method: "POST", body: answerPayload, signal: AbortSignal.timeout(120_000) },
       );
       const answerResult = (await answerResponse.json().catch(() => null)) as
@@ -243,6 +374,8 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
       .filter((value): value is string => typeof value === "string");
     const examPdf = formData.get("examPdf");
     const answerPdf = formData.get("answerPdf");
+    const directExamKey = text(formData, "examPdfKey");
+    const directAnswerKey = text(formData, "answerPdfKey");
     const publishNow = checked(formData, "publishNow");
     const pointByType = {
       MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25),
@@ -256,10 +389,14 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
     if (title.length < 3 || title.length > 150) {
       return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
     }
-    const examPdfError = validatePdf(examPdf, true);
-    if (examPdfError) return { success: false, error: examPdfError };
-    const answerPdfError = validatePdf(answerPdf, false);
-    if (answerPdfError) return { success: false, error: answerPdfError };
+    if (!directExamKey) {
+      const examPdfError = validatePdf(examPdf, true);
+      if (examPdfError) return { success: false, error: examPdfError };
+    }
+    if (!directAnswerKey) {
+      const answerPdfError = validatePdf(answerPdf, false);
+      if (answerPdfError) return { success: false, error: answerPdfError };
+    }
     if (!sections) return { success: false, error: "Cấu hình phiếu tô không hợp lệ." };
     const questionCount = sections.reduce((sum, section) => sum + section.count, 0);
     if (questionCount > 200) {
@@ -310,19 +447,36 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
       return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
     }
 
-    const examId = randomUUID();
-    examKey = buildExamDocumentKey({ examId, filename: "de.pdf" });
-    answerKeyFile =
+    const requestedExamId = text(formData, "examId");
+    const examId = requestedExamId || randomUUID();
+    if (!validUploadId(examId)) return { success: false, error: "Mã đề không hợp lệ." };
+    if (await db.exam.findUnique({ where: { id: examId }, select: { id: true } })) {
+      return { success: false, error: "Mã đề đã tồn tại, vui lòng tải file lại." };
+    }
+    examKey = directExamKey || buildExamDocumentKey({ examId, filename: "de.pdf" });
+    if (directExamKey) {
+      if (!isExpectedExamKey(directExamKey, examId, "exam")) {
+        return { success: false, error: "Đường dẫn file đề không hợp lệ." };
+      }
+      await verifyStoredPdf(directExamKey);
+    } else {
+      const examBytes = Buffer.from(await (examPdf as File).arrayBuffer());
+      if (!examBytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+        return { success: false, error: "File đề không phải PDF hợp lệ." };
+      }
+      await uploadDocument(examKey, examBytes);
+    }
+    answerKeyFile = directAnswerKey || (
       answerPdf instanceof File && answerPdf.size > 0
         ? buildExamDocumentKey({ examId, filename: "dapan.pdf" })
-        : undefined;
-
-    const examBytes = Buffer.from(await (examPdf as File).arrayBuffer());
-    if (!examBytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
-      return { success: false, error: "File đề không phải PDF hợp lệ." };
-    }
-    await uploadDocument(examKey, examBytes);
-    if (answerKeyFile && answerPdf instanceof File) {
+        : undefined
+    );
+    if (directAnswerKey) {
+      if (!isExpectedExamKey(directAnswerKey, examId, "answer")) {
+        return { success: false, error: "Đường dẫn file lời giải không hợp lệ." };
+      }
+      await verifyStoredPdf(directAnswerKey);
+    } else if (answerKeyFile && answerPdf instanceof File) {
       const answerBytes = Buffer.from(await answerPdf.arrayBuffer());
       if (!answerBytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
         await deleteDocument(examKey);
@@ -435,6 +589,8 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
     const examPdf = formData.get("examPdf");
     const answerPdf = formData.get("answerPdf");
+    const directExamKey = text(formData, "examPdfKey");
+    const directAnswerKey = text(formData, "answerPdfKey");
     const removeSolution = checked(formData, "removeSolution");
     const pointByType = {
       MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25),
@@ -452,11 +608,15 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     if ((!isForever && (!availableFrom || !availableTo)) || (availableFrom && Number.isNaN(availableFrom.getTime())) || (availableTo && Number.isNaN(availableTo.getTime())) || (availableFrom && availableTo && availableFrom >= availableTo)) {
       return { success: false, error: "Khung thời gian giao đề không hợp lệ." };
     }
-    const examPdfError = validatePdf(examPdf, false);
-    if (examPdfError) return { success: false, error: examPdfError };
-    const answerPdfError = validatePdf(answerPdf, false);
-    if (answerPdfError) return { success: false, error: answerPdfError };
-    if (removeSolution && answerPdf instanceof File && answerPdf.size > 0) {
+    if (!directExamKey) {
+      const examPdfError = validatePdf(examPdf, false);
+      if (examPdfError) return { success: false, error: examPdfError };
+    }
+    if (!directAnswerKey) {
+      const answerPdfError = validatePdf(answerPdf, false);
+      if (answerPdfError) return { success: false, error: answerPdfError };
+    }
+    if (removeSolution && (directAnswerKey || (answerPdf instanceof File && answerPdf.size > 0))) {
       return { success: false, error: "Chỉ chọn thay file lời giải hoặc xóa lời giải, không chọn cả hai." };
     }
 
@@ -471,13 +631,26 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     const classCount = await db.class.count({ where: { id: { in: classIds }, status: "ACTIVE" } });
     if (classCount !== classIds.length) return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
 
-    if (examPdf instanceof File && examPdf.size > 0) {
+    if (directExamKey) {
+      if (!isExpectedExamKey(directExamKey, examId, "exam", true)) {
+        return { success: false, error: "Đường dẫn phiên bản file đề không hợp lệ." };
+      }
+      await verifyStoredPdf(directExamKey);
+      uploadedExamKey = directExamKey;
+    } else if (examPdf instanceof File && examPdf.size > 0) {
       const bytes = Buffer.from(await examPdf.arrayBuffer());
       if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) return { success: false, error: "File đề không phải PDF hợp lệ." };
       uploadedExamKey = buildExamRevisionKey({ examId, kind: "de", revisionId: randomUUID() });
       await uploadDocument(uploadedExamKey, bytes);
     }
-    if (answerPdf instanceof File && answerPdf.size > 0) {
+    if (directAnswerKey) {
+      if (!isExpectedExamKey(directAnswerKey, examId, "answer", true)) {
+        if (uploadedExamKey) await deleteDocument(uploadedExamKey).catch(() => undefined);
+        return { success: false, error: "Đường dẫn phiên bản file lời giải không hợp lệ." };
+      }
+      await verifyStoredPdf(directAnswerKey);
+      uploadedAnswerKey = directAnswerKey;
+    } else if (answerPdf instanceof File && answerPdf.size > 0) {
       const bytes = Buffer.from(await answerPdf.arrayBuffer());
       if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
         if (uploadedExamKey) {

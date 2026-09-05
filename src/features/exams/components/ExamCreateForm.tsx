@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ScanText } from "lucide-react";
 
-import { analyzeExamPdf, createExam } from "../admin-actions";
+import { analyzeExamPdf, createExam, discardExamUpload } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
+import { uploadExamPdf } from "./exam-upload";
 
 type ClassOption = { id: string; name: string; level: string };
 type Section = { label: string; count: number; type: ExamQuestionType };
@@ -32,7 +33,15 @@ function flattenTypes(sections: Section[]) {
   return sections.flatMap((section) => Array(section.count).fill(section.type) as ExamQuestionType[]);
 }
 
-export function ExamCreateForm({ classes }: { classes: ClassOption[] }) {
+type UploadedFiles = {
+  examId: string;
+  examFile: File;
+  answerFile?: File;
+  examKey: string;
+  answerKey?: string;
+};
+
+export function ExamCreateForm({ classes, directUpload }: { classes: ClassOption[]; directUpload: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -45,6 +54,7 @@ export function ExamCreateForm({ classes }: { classes: ClassOption[] }) {
   const [sheetType, setSheetType] = useState<"STANDARD" | "CUSTOM">("STANDARD");
   const [sections, setSections] = useState<Section[]>(STANDARD_SECTIONS);
   const [answers, setAnswers] = useState<string[]>(flattenTypes(STANDARD_SECTIONS).map(emptyAnswer));
+  const uploadedFiles = useRef<UploadedFiles | null>(null);
   const questionTypes = useMemo(() => flattenTypes(sections), [sections]);
   const total = questionTypes.length;
 
@@ -61,14 +71,51 @@ export function ExamCreateForm({ classes }: { classes: ClassOption[] }) {
     syncSections(type === "STANDARD" ? STANDARD_SECTIONS : [{ label: "Phần 1", count: 10, type: "MULTIPLE_CHOICE" }]);
   }
 
+  async function ensureUploaded() {
+    if (!examPdf) throw new Error("Hãy chọn file đề PDF trước.");
+    const cached = uploadedFiles.current;
+    if (cached && cached.examFile === examPdf && cached.answerFile === answerPdf) return cached;
+    if (cached) {
+      await Promise.all([
+        discardExamUpload(cached.examId, cached.examKey),
+        cached.answerKey ? discardExamUpload(cached.examId, cached.answerKey) : Promise.resolve(),
+      ]);
+    }
+    const examId = crypto.randomUUID();
+    const examKey = await uploadExamPdf({ examId, kind: "exam", file: examPdf });
+    try {
+      const answerKey = answerPdf
+        ? await uploadExamPdf({ examId, kind: "answer", file: answerPdf })
+        : undefined;
+      const uploaded = { examId, examFile: examPdf, answerFile: answerPdf, examKey, answerKey };
+      uploadedFiles.current = uploaded;
+      return uploaded;
+    } catch (error) {
+      await discardExamUpload(examId, examKey);
+      throw error;
+    }
+  }
+
   async function handleOcr() {
     if (!examPdf) return setError("Hãy chọn file đề PDF trước khi quét OCR.");
     setError(undefined);
     setOcrMessage(undefined);
     setIsAnalyzing(true);
     const data = new FormData();
-    data.set("examPdf", examPdf);
-    if (answerPdf) data.set("answerPdf", answerPdf);
+    try {
+      if (directUpload) {
+        const uploaded = await ensureUploaded();
+        data.set("examId", uploaded.examId);
+        data.set("examPdfKey", uploaded.examKey);
+        if (uploaded.answerKey) data.set("answerPdfKey", uploaded.answerKey);
+      } else {
+        data.set("examPdf", examPdf);
+        if (answerPdf) data.set("answerPdf", answerPdf);
+      }
+    } catch (error) {
+      setIsAnalyzing(false);
+      return setError(error instanceof Error ? error.message : "Không thể upload PDF.");
+    }
     const result = await analyzeExamPdf(data);
     setIsAnalyzing(false);
     if (!result.success) return setError(result.error);
@@ -91,8 +138,30 @@ export function ExamCreateForm({ classes }: { classes: ClassOption[] }) {
     formData.set("sections", JSON.stringify(sections));
     formData.set("answerKey", JSON.stringify(answers));
     startTransition(async () => {
+      if (directUpload) {
+        try {
+          const uploaded = await ensureUploaded();
+          formData.set("examId", uploaded.examId);
+          formData.set("examPdfKey", uploaded.examKey);
+          if (uploaded.answerKey) formData.set("answerPdfKey", uploaded.answerKey);
+          formData.delete("examPdf");
+          formData.delete("answerPdf");
+        } catch (error) {
+          return setError(error instanceof Error ? error.message : "Không thể upload PDF.");
+        }
+      }
       const result = await createExam(formData);
-      if (!result.success) return setError(result.error);
+      if (!result.success) {
+        const uploaded = uploadedFiles.current;
+        if (uploaded) {
+          await Promise.all([
+            discardExamUpload(uploaded.examId, uploaded.examKey),
+            uploaded.answerKey ? discardExamUpload(uploaded.examId, uploaded.answerKey) : Promise.resolve(),
+          ]);
+          uploadedFiles.current = null;
+        }
+        return setError(result.error);
+      }
       router.push("/admin/de-thi");
       router.refresh();
     });
@@ -104,6 +173,7 @@ export function ExamCreateForm({ classes }: { classes: ClassOption[] }) {
 
   return (
     <form action={handleSubmit} className="space-y-6">
+      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Cloudflare R2. Không nên tạo đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
           <label className="text-sm font-medium text-navy-500 sm:col-span-2">Tên đề<input name="title" required minLength={3} maxLength={150} className={inputClass} placeholder="Ví dụ: Đề thi tốt nghiệp THPT 2026 — mã 0102" /></label>

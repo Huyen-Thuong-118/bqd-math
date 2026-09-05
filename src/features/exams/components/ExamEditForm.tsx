@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { updateExam } from "../admin-actions";
+import { discardExamUpload, updateExam } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
+import { uploadExamPdf } from "./exam-upload";
 
 type ClassOption = { id: string; name: string; level: string };
 type EditableQuestion = { number: number; type: ExamQuestionType; correctAnswer: string };
@@ -33,7 +34,7 @@ type EditableExam = {
 
 const input = "mt-1 w-full rounded-xl border border-navy-100 bg-white px-3 py-2.5 text-sm text-navy-600 outline-none focus:border-navy-400";
 
-export function ExamEditForm({ exam, classes }: { exam: EditableExam; classes: ClassOption[] }) {
+export function ExamEditForm({ exam, classes, directUpload }: { exam: EditableExam; classes: ClassOption[]; directUpload: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
@@ -49,8 +50,43 @@ export function ExamEditForm({ exam, classes }: { exam: EditableExam; classes: C
     setError(undefined);
     formData.set("answerKey", JSON.stringify(answers));
     startTransition(async () => {
+      const uploadedKeys: string[] = [];
+      if (directUpload) {
+        try {
+          const examPdf = formData.get("examPdf");
+          const answerPdf = formData.get("answerPdf");
+          if (examPdf instanceof File && examPdf.size > 0) {
+            const key = await uploadExamPdf({
+              examId: exam.id,
+              kind: "exam",
+              file: examPdf,
+              revisionId: crypto.randomUUID(),
+            });
+            uploadedKeys.push(key);
+            formData.set("examPdfKey", key);
+          }
+          if (answerPdf instanceof File && answerPdf.size > 0) {
+            const key = await uploadExamPdf({
+              examId: exam.id,
+              kind: "answer",
+              file: answerPdf,
+              revisionId: crypto.randomUUID(),
+            });
+            uploadedKeys.push(key);
+            formData.set("answerPdfKey", key);
+          }
+          formData.delete("examPdf");
+          formData.delete("answerPdf");
+        } catch (error) {
+          await Promise.all(uploadedKeys.map((key) => discardExamUpload(exam.id, key)));
+          return setError(error instanceof Error ? error.message : "Không thể upload PDF.");
+        }
+      }
       const result = await updateExam(exam.id, formData);
-      if (!result.success) return setError(result.error);
+      if (!result.success) {
+        await Promise.all(uploadedKeys.map((key) => discardExamUpload(exam.id, key)));
+        return setError(result.error);
+      }
       router.push("/admin/de-thi");
       router.refresh();
     });
@@ -58,6 +94,7 @@ export function ExamEditForm({ exam, classes }: { exam: EditableExam; classes: C
 
   return (
     <form action={submit} className="space-y-6">
+      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Cloudflare R2. Không nên thay file đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       {exam.attemptCount > 0 && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Đề đã có {exam.attemptCount} lượt làm. Điểm và đáp án của các bài đã nộp được giữ nguyên theo bản chụp; thay đổi mới chỉ áp dụng cho lượt nộp sau.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">

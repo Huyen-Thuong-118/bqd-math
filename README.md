@@ -171,11 +171,9 @@ server sau khi đổi biến môi trường. Xem đầy đủ luồng và checkl
 - [ ] Load test 500 concurrent bằng k6 trước khi dùng thi thật
 - [ ] Deploy lên [Vercel](https://vercel.com) — connect thẳng repo GitHub này
 
-## Deploy
+## Deploy production
 
-Khuyến nghị dùng **Vercel** (đội ngũ làm Next.js, miễn phí cho project nhỏ):
-
-1. Vào [vercel.com](https://vercel.com) → New Project → import repo này
-2. Điền các biến môi trường giống `.env` vào phần Environment Variables
-3. Deploy — Vercel tự nhận diện Next.js, không cần config thêm
-4. Sau đó gắn domain `bqdmath.edu.vn` trong Project Settings → Domains
+Không deploy bản dùng thật chỉ bằng cách import repo rồi bấm Deploy. Production
+cần database cloud có backup, R2 private, email domain thật, secret riêng, migration
+và smoke test hai vai trò. Làm theo runbook đầy đủ tại
+[`docs/production-deployment.md`](./docs/production-deployment.md).

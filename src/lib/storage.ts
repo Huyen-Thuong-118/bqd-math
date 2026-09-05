@@ -5,6 +5,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -33,14 +34,20 @@ function getR2Client() {
   });
 }
 
-function safeLocalPath(key: string) {
+function safeStorageKey(key: string) {
   const normalized = path.posix.normalize(key).replace(/^\/+/, "");
   if (
+    normalized !== key.replace(/^\/+/, "") ||
     normalized.startsWith("..") ||
     (!normalized.startsWith("exams/") && !normalized.startsWith("documents/"))
   ) {
     throw new Error("Storage key không hợp lệ.");
   }
+  return normalized;
+}
+
+function safeLocalPath(key: string) {
+  const normalized = safeStorageKey(key);
   return path.join(LOCAL_STORAGE_ROOT, ...normalized.split("/"));
 }
 
@@ -83,27 +90,29 @@ export async function uploadDocument(
   file: Buffer,
   contentType = "application/pdf",
 ) {
+  const safeKey = safeStorageKey(key);
   if (!isR2Configured()) {
-    const destination = safeLocalPath(key);
+    const destination = safeLocalPath(safeKey);
     await mkdir(path.dirname(destination), { recursive: true });
     await writeFile(destination, file);
-    return key;
+    return safeKey;
   }
   await getR2Client().send(
     new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
+      Key: safeKey,
       Body: file,
       ContentType: contentType,
     }),
   );
-  return key;
+  return safeKey;
 }
 
 export async function readDocument(key: string): Promise<Uint8Array> {
-  if (!isR2Configured()) return readFile(safeLocalPath(key));
+  const safeKey = safeStorageKey(key);
+  if (!isR2Configured()) return readFile(safeLocalPath(safeKey));
   const result = await getR2Client().send(
-    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: safeKey }),
   );
   if (!result.Body) throw new Error("File không tồn tại.");
   return result.Body.transformToByteArray();
@@ -115,11 +124,12 @@ export async function getSignedDocumentUrl(
   contentDisposition?: string,
 ) {
   if (!isR2Configured()) throw new Error("Signed URL chỉ dùng khi đã bật R2.");
+  const safeKey = safeStorageKey(key);
   return getSignedUrl(
     getR2Client(),
     new GetObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
+      Key: safeKey,
       ResponseContentDisposition: contentDisposition,
     }),
     { expiresIn: expiresInSeconds },
@@ -132,23 +142,57 @@ export async function getSignedUploadUrl(
   expiresInSeconds = 300,
 ) {
   if (!isR2Configured()) throw new Error("Signed upload chỉ dùng khi đã bật R2.");
+  const safeKey = safeStorageKey(key);
   return getSignedUrl(
     getR2Client(),
     new PutObjectCommand({
       Bucket: process.env.R2_BUCKET_NAME!,
-      Key: key,
+      Key: safeKey,
       ContentType: contentType,
     }),
     { expiresIn: expiresInSeconds },
   );
 }
 
-export async function deleteDocument(key: string) {
+export async function getDocumentMetadata(key: string) {
+  const safeKey = safeStorageKey(key);
   if (!isR2Configured()) {
-    await rm(safeLocalPath(key), { force: true });
+    const file = await readFile(safeLocalPath(safeKey));
+    return { size: file.byteLength, contentType: undefined as string | undefined };
+  }
+  const result = await getR2Client().send(
+    new HeadObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: safeKey }),
+  );
+  return { size: result.ContentLength ?? 0, contentType: result.ContentType };
+}
+
+export async function readDocumentPrefix(key: string, byteCount: number) {
+  const safeKey = safeStorageKey(key);
+  if (!Number.isInteger(byteCount) || byteCount <= 0 || byteCount > 1024) {
+    throw new Error("Độ dài kiểm tra file không hợp lệ.");
+  }
+  if (!isR2Configured()) {
+    const file = await readFile(safeLocalPath(safeKey));
+    return file.subarray(0, byteCount);
+  }
+  const result = await getR2Client().send(
+    new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: safeKey,
+      Range: `bytes=0-${byteCount - 1}`,
+    }),
+  );
+  if (!result.Body) throw new Error("File không tồn tại.");
+  return result.Body.transformToByteArray();
+}
+
+export async function deleteDocument(key: string) {
+  const safeKey = safeStorageKey(key);
+  if (!isR2Configured()) {
+    await rm(safeLocalPath(safeKey), { force: true });
     return;
   }
   await getR2Client().send(
-    new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+    new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: safeKey }),
   );
 }
