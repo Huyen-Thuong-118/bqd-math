@@ -26,6 +26,7 @@ export type ExamListItem = {
   openAttemptId: string | null;
   available: boolean;
   availabilityLabel: string;
+  recentAttempts: { id: string; score: number; submittedAt: string }[];
 };
 
 export type TakingQuestion = {

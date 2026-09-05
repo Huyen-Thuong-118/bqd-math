@@ -24,15 +24,26 @@ export type GradeResult = {
   answers: GradedAnswer[];
 };
 
+export type ScoringPolicy = { trueFalseFractions?: number[] };
+
 export function normalizeAnswer(value: string | null | undefined): string | null {
   const normalized = value?.trim().toUpperCase();
   return normalized ? normalized : null;
+}
+
+function normalizeForType(value: string | null | undefined, type: GradableQuestion["type"]) {
+  const normalized = normalizeAnswer(value);
+  if (!normalized) return null;
+  if (type === "SHORT_ANSWER") return normalized.replace(/\s/g, "").replace(",", ".");
+  if (type === "TRUE_FALSE") return normalized.replace(/Đ/g, "D").replace(/\s*,\s*/g, ",");
+  return normalized;
 }
 
 /** Hàm thuần: điểm cuối cùng quy về thang 10, làm tròn hai chữ số. */
 export function gradeExam(
   questions: GradableQuestion[],
   latestAnswers: ReadonlyMap<number, string>,
+  scoringPolicy: ScoringPolicy = {},
 ): GradeResult {
   const totalPoints = questions.reduce((sum, question) => sum + question.points, 0);
   if (questions.length === 0 || totalPoints <= 0) {
@@ -45,8 +56,8 @@ export function gradeExam(
   let earnedPoints = 0;
 
   const answers = questions.map<GradedAnswer>((question) => {
-    const selectedAnswer = normalizeAnswer(latestAnswers.get(question.number));
-    const correctAnswer = normalizeAnswer(question.correctAnswer)!;
+    const selectedAnswer = normalizeForType(latestAnswers.get(question.number), question.type);
+    const correctAnswer = normalizeForType(question.correctAnswer, question.type)!;
     const isCorrect = selectedAnswer === correctAnswer;
 
     if (!selectedAnswer) unansweredCount += 1;
@@ -58,7 +69,10 @@ export function gradeExam(
       const selected = selectedAnswer.split(",");
       const correct = correctAnswer.split(",");
       const correctStatements = correct.filter((value, index) => value === selected[index]).length;
-      const standardScore = [0, 0.1, 0.25, 0.5, 1][correctStatements];
+      const fractions = scoringPolicy.trueFalseFractions?.length === 5
+        ? scoringPolicy.trueFalseFractions
+        : [0, 0.1, 0.25, 0.5, 1];
+      const standardScore = fractions[correctStatements] ?? 0;
       pointsAwarded = standardScore * question.points;
     }
     earnedPoints += pointsAwarded;

@@ -1,63 +1,5 @@
 import { DAY_LABEL, type ClassSession, type DaySchedule } from "./types";
 
-/**
- * Dữ liệu lịch giảng dạy — hiện là MOCK để dựng UI.
- *
- * TODO: thay bằng truy vấn thật, ví dụ trong features/home/queries.ts:
- *   const sessions = await prisma.teachingSchedule.findMany({
- *     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
- *   });
- * Field ở đây đã đặt trùng tên với model TeachingSchedule nên chỉ cần
- * đổi nguồn data, `groupByDay()` và các component giữ nguyên.
- */
-const scheduleMock: ClassSession[] = [
-  {
-    id: "1",
-    className: "Toán 12 — Cơ bản",
-    dayOfWeek: 1, // Thứ 2
-    startTime: "18:00",
-    endTime: "20:00",
-    level: "BASIC",
-    mode: "Trực tiếp",
-  },
-  {
-    id: "2",
-    className: "Toán 12 — Nâng cao",
-    dayOfWeek: 3, // Thứ 4
-    startTime: "19:00",
-    endTime: "21:00",
-    level: "ADVANCED",
-    mode: "Trực tiếp",
-  },
-  {
-    id: "3",
-    className: "Toán 11 — Cơ bản",
-    dayOfWeek: 5, // Thứ 6
-    startTime: "18:30",
-    endTime: "20:30",
-    level: "BASIC",
-    mode: "Online",
-  },
-  {
-    id: "4",
-    className: "Toán 12 — Cơ bản",
-    dayOfWeek: 6, // Thứ 7
-    startTime: "08:00",
-    endTime: "10:00",
-    level: "BASIC",
-    mode: "Trực tiếp",
-  },
-  {
-    id: "5",
-    className: "Luyện đề — Nâng cao",
-    dayOfWeek: 6, // Thứ 7
-    startTime: "14:00",
-    endTime: "16:00",
-    level: "ADVANCED",
-    mode: "Online",
-  },
-];
-
 /** Thứ tự hiển thị trong tuần: Thứ 2 → Chủ nhật.
  *  dayOfWeek 0 = Chủ nhật nhưng phải đứng CUỐI khi hiển thị, đúng thói quen
  *  đọc lịch của người Việt. */
@@ -88,6 +30,3 @@ export function groupByDay(sessions: ClassSession[]): DaySchedule[] {
     ),
   }));
 }
-
-/** Lịch đủ 7 ngày trong tuần, dùng trực tiếp cho ScheduleSection. */
-export const weeklySchedule: DaySchedule[] = groupByDay(scheduleMock);

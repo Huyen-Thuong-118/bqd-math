@@ -2,10 +2,10 @@
 
 Module "Lớp học": giáo viên quản lý nhiều lớp, HS chỉ vào được lớp mình.
 
-**Sẽ chứa:**
-- `queries.ts` — `getClassesForUser()`, `getClassDocuments(classId)`
-- `actions.ts` — tạo lớp, thêm/xoá HS khỏi lớp, upload tài liệu vào lớp
-- `components/` — `ClassCard.tsx`, `DocumentList.tsx` (sort theo ngày TẠO, hiện "Cập nhật lần thứ X")
-- `types.ts`
+**Đã triển khai:**
+- `queries.ts` — danh sách/chi tiết lớp luôn lọc bằng `studentId` từ session.
+- `actions.ts` — tạo, sửa, lưu trữ/khôi phục lớp; cập nhật enrollment hàng loạt; đăng thông báo.
+- `components/AdminClassesManager.tsx` — UI vận hành, sĩ số và thống kê điểm/lượt làm.
 
-**Liên quan:** `prisma/schema.prisma` model `Class`, `Document`.
+Lớp `ARCHIVED` vẫn hiển thị lịch sử cho học sinh nhưng các action từ chối
+enrollment, thông báo và nội dung mới.

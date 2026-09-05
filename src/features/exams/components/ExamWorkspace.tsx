@@ -22,6 +22,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
+  const [marked, setMarked] = useState<Set<number>>(new Set());
   const submittingRef = useRef(false);
   const { answers, selectAnswer, flushNow, saveStatus } = useAnswerBuffer(
     attempt.id,
@@ -34,6 +35,8 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
 
   const handleSubmit = useCallback(async () => {
     if (submittingRef.current) return;
+    const unanswered = attempt.questions.length - answeredCount;
+    if (unanswered > 0 && !window.confirm(`Bạn còn ${unanswered} câu chưa trả lời. Vẫn nộp bài?`)) return;
     submittingRef.current = true;
     setIsSubmitting(true);
     setError(undefined);
@@ -55,7 +58,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
     }
     router.replace(`/thi-thu/${attempt.examId}/result?attemptId=${attempt.id}`);
     router.refresh();
-  }, [attempt.examId, attempt.id, flushNow, router]);
+  }, [answeredCount, attempt.examId, attempt.id, attempt.questions.length, flushNow, router]);
 
   return (
     <div className="space-y-6">
@@ -92,7 +95,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
 
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(24rem,0.75fr)]">
         <PdfViewer title="Đề thi" fileUrl={attempt.hasExamFile ? `/api/exams/${attempt.examId}/file/exam` : undefined} allowDownload={attempt.allowDownload} watermark={attempt.examTitle} unavailableMessage="Đề demo hiện dùng nội dung câu hỏi tích hợp." />
-        <div className="xl:sticky xl:top-40"><AnswerSheet questions={attempt.questions} answers={answers} disabled={isSubmitting} onAnswer={selectAnswer} /><p className="mt-2 px-2 text-xs text-navy-300">Lời giải chỉ xuất hiện ở trang kết quả sau khi nộp nếu giáo viên cho phép.</p></div>
+        <div className="xl:sticky xl:top-40"><AnswerSheet questions={attempt.questions} answers={answers} disabled={isSubmitting} onAnswer={selectAnswer} marked={marked} onToggleMarked={(number) => setMarked((current) => { const next = new Set(current); if (next.has(number)) next.delete(number); else next.add(number); return next; })} /><p className="mt-2 px-2 text-xs text-navy-300">Màu vàng là câu đã đánh dấu xem lại. Lời giải chỉ xuất hiện sau khi nộp nếu giáo viên cho phép.</p></div>
       </div>
 
       {error && (

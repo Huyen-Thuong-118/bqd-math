@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 
-import { weeklySchedule } from "../data";
+import type { DaySchedule } from "../types";
 import { DayScheduleCard } from "./DayScheduleCard";
 
 /**
@@ -13,7 +13,7 @@ import { DayScheduleCard } from "./DayScheduleCard";
  * `scroll-mt-32` để khi bấm CTA "Xem lịch học" ở Hero, tiêu đề không bị
  * thanh nav nổi (sticky) che mất.
  */
-export function ScheduleSection() {
+export function ScheduleSection({ schedule }: { schedule: DaySchedule[] }) {
   return (
     <section
       id="lich-giang-day"
@@ -44,7 +44,7 @@ export function ScheduleSection() {
           trả về đủ 7 ngày nên nhánh đó là code chết — trạng thái trống giờ
           nằm ở TỪNG card. */}
       <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-        {weeklySchedule.map((day, index) => (
+        {schedule.map((day, index) => (
           <DayScheduleCard key={day.dayOfWeek} day={day} index={index} />
         ))}
       </div>

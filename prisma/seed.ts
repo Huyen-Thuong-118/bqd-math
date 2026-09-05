@@ -113,6 +113,10 @@ async function seedSliceOneDemo() {
       description: "Lớp dữ liệu mẫu để kiểm thử luồng giao đề và chấm điểm.",
     },
   });
+  await db.classScheduleSlot.createMany({
+    data: [{ classId: DEMO_CLASS_ID, dayOfWeek: 6, startTime: "08:00", endTime: "10:00" }],
+    skipDuplicates: true,
+  });
   await db.classEnrollment.upsert({
     where: {
       classId_studentId: { classId: DEMO_CLASS_ID, studentId: student.id },
@@ -129,6 +133,8 @@ async function seedSliceOneDemo() {
       durationMinutes: 20,
       maxAttempts: 3,
       isForever: true,
+      status: "PUBLISHED",
+      publishedAt: new Date(),
     },
     create: {
       id: DEMO_EXAM_ID,
@@ -139,6 +145,8 @@ async function seedSliceOneDemo() {
       maxAttempts: 3,
       isForever: true,
       showAnswer: true,
+      status: "PUBLISHED",
+      publishedAt: new Date(),
     },
   });
   await db.examClass.upsert({

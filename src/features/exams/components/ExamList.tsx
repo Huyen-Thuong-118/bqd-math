@@ -53,6 +53,7 @@ export function ExamList({ exams }: { exams: ExamListItem[] }) {
                   </span>
                 )}
               </div>
+              {exam.recentAttempts.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{exam.recentAttempts.map((attempt, index) => <a key={attempt.id} href={`/thi-thu/${exam.id}/result?attemptId=${attempt.id}`} className="rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 underline">Lần {exam.attemptCount - index}: {attempt.score.toFixed(2)}</a>)}</div>}
             </div>
             <StartExamButton
               examId={exam.id}

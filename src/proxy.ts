@@ -17,7 +17,7 @@ export default auth(async (req) => {
   const user = req.auth?.user;
 
   const isAdminRoute = pathname.startsWith("/admin");
-  const isStudentRoute = ["/lop-hoc", "/on-tap", "/thi-thu", "/tai-lieu"].some(
+  const isStudentRoute = ["/lop-hoc", "/lich-hoc", "/on-tap", "/thi-thu", "/tai-lieu"].some(
     (p) => pathname.startsWith(p),
   );
 
@@ -83,6 +83,7 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/lop-hoc/:path*",
+    "/lich-hoc/:path*",
     "/on-tap/:path*",
     "/thi-thu/:path*",
     "/tai-lieu/:path*",

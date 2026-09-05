@@ -2,13 +2,10 @@
 
 Module "Câu hỏi ôn tập" — chia theo chương, có lời giải chữ hoặc video.
 
-**Sẽ chứa:**
-- `queries.ts` — lấy câu hỏi theo chương, tìm kiếm theo từ khóa
-- `components/`
-  - `QuestionCard.tsx`
-  - `SolutionToggle.tsx` — toggle Chữ/Video, video "sáng lên" nếu đã có,
-    ngược lại hiện "GV chưa làm video"
-  - `ChapterFilter.tsx`
-- `types.ts`
+**Đã triển khai:**
+- Ngân hàng theo chương, khối, chủ đề, độ khó và ba loại câu hỏi.
+- Tìm kiếm/lọc, gán lại cho nhiều lớp và sửa nội dung độc lập với việc gán.
+- Chấm đồng bộ phía server, ghi mọi `ReviewAttempt` và hiển thị tỷ lệ đúng.
+- Lời giải chữ, URL ảnh và Cloudflare Stream UID; đáp án đúng không có trong DTO ban đầu.
 
-**Liên quan:** `prisma/schema.prisma` model `Chapter`, `ReviewQuestion`.
+Mọi query và action của học sinh đều ràng buộc enrollment bằng `studentId` từ session.

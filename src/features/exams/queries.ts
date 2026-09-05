@@ -16,9 +16,10 @@ function stringOptions(value: unknown): string[] {
 }
 
 function availability(
-  exam: { isForever: boolean; availableFrom: Date | null; availableTo: Date | null },
+  exam: { status: "DRAFT" | "PUBLISHED" | "CLOSED"; isForever: boolean; availableFrom: Date | null; availableTo: Date | null },
   now: Date,
 ) {
+  if (exam.status === "CLOSED") return { available: false, label: "Đã đóng" };
   if (exam.isForever) return { available: true, label: "Luôn mở" };
   if (exam.availableFrom && exam.availableFrom > now) {
     return {
@@ -41,6 +42,7 @@ export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
   const userId = await requireActiveStudentId();
   const exams = await db.exam.findMany({
     where: {
+      status: { in: ["PUBLISHED", "CLOSED"] },
       examLinks: {
         some: { class: { enrollments: { some: { studentId: userId } } } },
       },
@@ -49,6 +51,7 @@ export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
       id: true,
       title: true,
       mode: true,
+      status: true,
       durationMinutes: true,
       maxAttempts: true,
       isForever: true,
@@ -83,6 +86,7 @@ export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
         exam.attempts.find((attempt) => !attempt.submittedAt)?.id ?? null,
       available: state.available,
       availabilityLabel: state.label,
+      recentAttempts: exam.attempts.filter((attempt): attempt is typeof attempt & { score: number; submittedAt: Date } => attempt.score !== null && attempt.submittedAt !== null).slice(0, 5).map((attempt) => ({ id: attempt.id, score: attempt.score, submittedAt: attempt.submittedAt.toISOString() })),
     };
   });
 }
@@ -127,6 +131,9 @@ export async function getTakingAttempt(
         select: { questionNumber: true, selectedAnswer: true, changedAt: true },
         orderBy: [{ changedAt: "asc" }, { id: "asc" }],
       },
+      finalizedAnswers: {
+        select: { questionNumber: true, selectedAnswer: true },
+      },
     },
   });
   if (!attempt) return null;
@@ -141,6 +148,9 @@ export async function getTakingAttempt(
       selectedAnswer: answer.selectedAnswer,
       changedAt: answer.changedAt.toISOString(),
     });
+  }
+  for (const answer of attempt.finalizedAnswers) {
+    if (answer.selectedAnswer) initialAnswers[answer.questionNumber] = answer.selectedAnswer;
   }
 
   return {
@@ -227,10 +237,10 @@ export async function getExamResult(
       correctAnswer:
         attempt.exam.hideWrongAnswers && !answer.isCorrect
           ? null
-          : answer.correctAnswer,
-      isCorrect: answer.isCorrect,
-      pointsAwarded: answer.pointsAwarded,
-      pointsPossible: answer.pointsPossible,
+          : answer.correctAnswer ?? null,
+      isCorrect: answer.isCorrect ?? false,
+      pointsAwarded: answer.pointsAwarded ?? 0,
+      pointsPossible: answer.pointsPossible ?? 0,
       explanation: answer.question.explanation,
     })),
   };

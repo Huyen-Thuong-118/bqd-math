@@ -154,11 +154,10 @@ enum ClassStatus {
 model Class {
   id          String      @id @default(cuid())
   name        String
-  level       ClassLevel // dùng lại enum ClassLevel hiện có (BASIC/ADVANCED,
-  // xem TeachingSchedule bên dưới) — KHÔNG tạo enum CO_BAN/NANG_CAO riêng vì
-  // trùng tên với enum đã có, đồng thời giá trị BASIC/ADVANCED đang được
-  // features/home (data.ts, DayScheduleCard.tsx, types.ts) dùng thật.
-  schedule    String
+  // level phân loại lớp Cơ bản/Nâng cao. schedule được giữ để tương thích dữ
+  // liệu cũ; lịch mới dùng ClassScheduleSlot để một lớp có thể học nhiều buổi.
+  level       ClassLevel @default(BASIC)
+  schedule    String     @default("")
   description String?
   status      ClassStatus @default(ACTIVE)
 
@@ -166,6 +165,9 @@ model Class {
   documents     Document[]
   examLinks     ExamClass[] // N-N với Exam — xem ExamClass
   questionLinks ClassReviewQuestion[] // N-N với ReviewQuestion — xem ClassReviewQuestion
+  documentLinks DocumentClass[]
+  announcements ClassAnnouncement[]
+  scheduleSlots ClassScheduleSlot[]
 
   // DEPRECATED: quan hệ 1-N cũ qua field Exam.classId (single FK) — back-relation
   // này BẮT BUỘC phải giữ vì Exam.classId/Exam.class vẫn còn (xem ghi chú ở
@@ -175,6 +177,18 @@ model Class {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ClassScheduleSlot {
+  id        String @id @default(cuid())
+  classId   String
+  class     Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  startTime String
+  endTime   String
+
+  @@index([classId, dayOfWeek])
+  @@unique([classId, dayOfWeek, startTime, endTime])
 }
 
 // N-N Class <-> User (student) — thay cho ClassStudent cũ (đã xoá, không ai
@@ -213,11 +227,15 @@ model Document {
   showAnswer Boolean @default(false) // GV quyết định hiện lời giải cho HS
 
   allowDownload Boolean @default(false)
+  fileName      String  @default("tai-lieu.pdf")
+  contentType   String  @default("application/pdf")
 
-  classId  String?
-  class    Class?  @relation(fields: [classId], references: [id])
-  folderId String?
-  folder   Folder? @relation(fields: [folderId], references: [id])
+  classId    String?
+  class      Class?            @relation(fields: [classId], references: [id])
+  folderId   String?
+  folder     Folder?           @relation(fields: [folderId], references: [id])
+  classLinks DocumentClass[]
+  versions   DocumentVersion[]
 
   // "Cập nhật lần thứ X" — KHÔNG dùng để sort danh sách (chỉ hiển thị ghi chú).
   // Danh sách trong lớp sort theo createdAt.
@@ -227,6 +245,31 @@ model Document {
   updatedAt DateTime @updatedAt
 }
 
+// N-N để một tài liệu có thể giao cho nhiều lớp mà không nhân bản file.
+model DocumentClass {
+  id         String   @id @default(cuid())
+  documentId String
+  classId    String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, classId])
+}
+
+// Lưu mọi phiên bản file để admin có lịch sử thay vì ghi đè mất dấu vết.
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  version     Int
+  fileUrl     String
+  fileName    String
+  contentType String
+  createdAt   DateTime @default(now())
+
+  @@unique([documentId, version])
+}
+
 // ---------------- ĐỀ THI ----------------
 
 model Exam {
@@ -234,7 +277,10 @@ model Exam {
   title String
 
   // MOCK có đồng hồ; PRACTICE không giới hạn thời gian. Lát cắt 1 dùng MOCK.
-  mode ExamMode @default(MOCK)
+  mode          ExamMode   @default(MOCK)
+  status        ExamStatus @default(DRAFT)
+  publishedAt   DateTime?
+  scoringPolicy Json?
 
   // DEPRECATED: dùng examLinks (ExamClass, N-N) thay cho quan hệ 1-N đơn này
   // — giữ tạm vì đã tồn tại từ code cũ, hiện KHÔNG có nơi nào trong src/
@@ -272,15 +318,15 @@ model Exam {
 // Câu hỏi có cấu trúc để server chấm được. correctAnswer TUYỆT ĐỐI không
 // select vào DTO trang làm bài; chỉ grading service phía server được đọc.
 model ExamQuestion {
-  id            String  @id @default(cuid())
+  id            String           @id @default(cuid())
   examId        String
-  exam          Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  exam          Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
   number        Int
   type          ExamQuestionType @default(MULTIPLE_CHOICE)
   content       String
   options       Json
   correctAnswer String
-  points        Float   @default(1)
+  points        Float            @default(1)
   explanation   String?
 
   finalizedAnswers AttemptAnswer[]
@@ -308,6 +354,12 @@ model ExamClass {
 enum ExamMode {
   MOCK // thi thử — có đếm giờ
   PRACTICE // luyện tập — không đếm giờ
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
 }
 
 model ExamAttempt {
@@ -346,10 +398,11 @@ model AttemptAnswer {
   question       ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
   questionNumber Int
   selectedAnswer String?
-  correctAnswer  String
-  isCorrect      Boolean
-  pointsAwarded  Float
-  pointsPossible Float
+  // null khi đang làm; được khóa thành snapshot đầy đủ lúc nộp bài.
+  correctAnswer  String?
+  isCorrect      Boolean?
+  pointsAwarded  Float?
+  pointsPossible Float?
 
   @@unique([attemptId, questionId])
   @@index([attemptId, questionNumber])
@@ -386,14 +439,33 @@ model ReviewQuestion {
   content       String
   options       Json // ["A. ...", "B. ...", "C. ...", "D. ..."]
   correctAnswer String
+  type          ReviewQuestionType @default(MULTIPLE_CHOICE)
+  grade         String?
+  topic         String?
+  difficulty    QuestionDifficulty @default(MEDIUM)
 
-  textSolution String?
-  videoUrl     String? // null -> hiện "GV chưa làm video"
+  textSolution     String?
+  solutionImageUrl String?
+  videoUrl         String? // null -> hiện "GV chưa làm video"
+  videoUid         String?
+  showSolution     Boolean @default(true)
 
   attempts   ReviewAttempt[]
   classLinks ClassReviewQuestion[] // N-N với Class — dùng lại câu hỏi cho nhiều lớp
 
   createdAt DateTime @default(now())
+}
+
+enum ReviewQuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
 }
 
 // N-N ReviewQuestion <-> Class — 1 câu hỏi dùng lại được cho nhiều lớp.
@@ -446,6 +518,19 @@ model Notification {
   type    NotificationType
   content String
   sentAt  DateTime         @default(now())
+}
+
+model ClassAnnouncement {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  isVisible Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([classId, createdAt])
 }
 
 model ContactInfo {

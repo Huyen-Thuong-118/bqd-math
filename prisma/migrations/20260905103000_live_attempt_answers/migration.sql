@@ -1,0 +1,5 @@
+ALTER TABLE "AttemptAnswer"
+ALTER COLUMN "correctAnswer" DROP NOT NULL,
+ALTER COLUMN "isCorrect" DROP NOT NULL,
+ALTER COLUMN "pointsAwarded" DROP NOT NULL,
+ALTER COLUMN "pointsPossible" DROP NOT NULL;

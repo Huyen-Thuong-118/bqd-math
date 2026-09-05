@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
-  CalendarDays,
   FileQuestionMark,
   Folder,
   GraduationCap,
+  House,
   LayoutDashboard,
   Users,
 } from "lucide-react";
@@ -34,8 +34,7 @@ const ADMIN_GROUPS = [
   {
     title: "Vận hành lớp học",
     items: [
-      { href: "/admin/lop-hoc", label: "Lớp học", icon: GraduationCap },
-      { href: "/admin/lich-day", label: "Lịch dạy", icon: CalendarDays },
+      { href: "/admin/lop-hoc", label: "Lớp học & lịch dạy", icon: GraduationCap },
     ],
   },
   {
@@ -68,6 +67,13 @@ export function AdminSidebar() {
       <p className="mb-4 px-2 text-xs font-semibold uppercase tracking-wide text-navy-300">
         Quản trị
       </p>
+      <Link
+        href="/"
+        className="mb-5 flex items-center gap-2.5 rounded-xl border border-navy-200 bg-white px-3 py-2.5 text-sm font-semibold text-navy-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-pastel-100"
+      >
+        <House className="size-4 shrink-0" aria-hidden />
+        Trang chủ BQD Math
+      </Link>
       <nav className="flex flex-col gap-4">
         {ADMIN_GROUPS.map((group) => (
           <div key={group.title}>

@@ -14,10 +14,12 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
+    "seed:test-data": "tsx scripts/seed-test-data.ts",
     "seed:samples": "tsx scripts/import-sample-exams.ts",
     "verify:slice-0": "tsx scripts/verify-slice-0.ts",
     "verify:slice-1": "tsx scripts/verify-slice-1.ts",
-    "verify:slice-2": "node --conditions=react-server --import tsx scripts/verify-slice-2.ts"
+    "verify:slice-2": "node --conditions=react-server --import tsx scripts/verify-slice-2.ts",
+    "verify:learning": "node --conditions=react-server --import tsx scripts/verify-learning-management.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

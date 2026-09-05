@@ -12,6 +12,7 @@ export default async function AdminExamsPage() {
     select: {
       id: true,
       title: true,
+      status: true,
       mode: true,
       answerFileUrl: true,
       showAnswer: true,
@@ -35,13 +36,13 @@ export default async function AdminExamsPage() {
         {exams.map((exam) => (
           <article key={exam.id} className="rounded-3xl border border-navy-100 bg-white p-5">
             <div className="flex items-start justify-between gap-3">
-              <div><p className="text-xs font-semibold uppercase tracking-wide text-navy-300">{exam.mode === "MOCK" ? "Thi thử" : "Luyện tập"}</p><h2 className="mt-1 font-semibold text-navy-600">{exam.title}</h2></div>
+              <div><p className="text-xs font-semibold uppercase tracking-wide text-navy-300">{exam.mode === "MOCK" ? "Thi thử" : "Luyện tập"} · {exam.status === "DRAFT" ? "Bản nháp" : exam.status === "CLOSED" ? "Đã đóng" : "Đã xuất bản"}</p><h2 className="mt-1 font-semibold text-navy-600">{exam.title}</h2></div>
               <span className="rounded-full bg-pastel-50 px-3 py-1 text-xs text-navy-400">{exam._count.questions} câu</span>
             </div>
             <p className="mt-3 text-sm text-navy-400">Lớp: {exam.examLinks.map((link) => link.class.name).join(", ") || "Chưa giao"}</p>
             <p className="mt-1 text-xs text-navy-300">{exam.isForever ? "Mở vĩnh viễn" : `${exam.availableFrom?.toLocaleString("vi-VN") ?? "—"} → ${exam.availableTo?.toLocaleString("vi-VN") ?? "—"}`} · {exam._count.attempts} lượt làm · {exam.allowDownload ? "Cho tải" : "Không cho tải"}</p>
-            <div className="mt-3 flex gap-2"><a href={`/api/exams/${exam.id}/file/exam`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-navy-500 underline">Xem đề</a>{exam.answerFileUrl && <a href={`/api/exams/${exam.id}/file/solution`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-navy-500 underline">Xem lời giải</a>}</div>
-            <AdminExamActions examId={exam.id} hasSolution={Boolean(exam.answerFileUrl)} showAnswer={exam.showAnswer} />
+            <div className="mt-3 flex flex-wrap gap-3"><Link href={`/admin/de-thi/${exam.id}/chinh-sua`} className="text-xs font-semibold text-navy-600 underline">Chỉnh sửa</Link><a href={`/api/exams/${exam.id}/file/exam`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-navy-500 underline">Xem đề</a>{exam.answerFileUrl && <a href={`/api/exams/${exam.id}/file/solution`} target="_blank" rel="noreferrer" className="text-xs font-semibold text-navy-500 underline">Xem lời giải</a>}<Link href={`/admin/de-thi/${exam.id}/xem-truoc`} className="text-xs font-semibold text-navy-500 underline">Xem trước như học sinh</Link><Link href={`/admin/de-thi/${exam.id}/thong-ke`} className="text-xs font-semibold text-navy-500 underline">Thống kê & CSV</Link></div>
+            <AdminExamActions examId={exam.id} hasSolution={Boolean(exam.answerFileUrl)} showAnswer={exam.showAnswer} status={exam.status} />
           </article>
         ))}
       </div>

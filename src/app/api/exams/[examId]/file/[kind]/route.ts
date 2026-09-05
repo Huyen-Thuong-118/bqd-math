@@ -32,6 +32,7 @@ export async function GET(
     where: { id: examId },
     select: {
       title: true,
+      status: true,
       examFileUrl: true,
       answerFileUrl: true,
       showAnswer: true,
@@ -53,6 +54,9 @@ export async function GET(
   const isAdmin = user.role === "ADMIN";
   if (!isAdmin && (user.role !== "STUDENT" || exam.examLinks.length === 0)) {
     return errorResponse("Bạn không có quyền xem đề này.", 403);
+  }
+  if (!isAdmin && exam.status === "DRAFT") {
+    return errorResponse("Đề chưa được xuất bản.", 403);
   }
 
   if (

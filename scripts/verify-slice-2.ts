@@ -89,6 +89,8 @@ async function main() {
         answerFileUrl: solutionKey,
         showAnswer: true,
         allowDownload: false,
+        status: "PUBLISHED",
+        publishedAt: new Date(),
         examLinks: { create: { classId } },
       },
     });

@@ -35,10 +35,30 @@ function getR2Client() {
 
 function safeLocalPath(key: string) {
   const normalized = path.posix.normalize(key).replace(/^\/+/, "");
-  if (normalized.startsWith("..") || !normalized.startsWith("exams/")) {
+  if (
+    normalized.startsWith("..") ||
+    (!normalized.startsWith("exams/") && !normalized.startsWith("documents/"))
+  ) {
     throw new Error("Storage key không hợp lệ.");
   }
   return path.join(LOCAL_STORAGE_ROOT, ...normalized.split("/"));
+}
+
+export function buildLearningDocumentKey(params: {
+  documentId: string;
+  version: number;
+  filename: string;
+}) {
+  const extension = path.extname(params.filename).toLowerCase().replace(/[^.a-z0-9]/g, "");
+  return `documents/${params.documentId}/v${params.version}/file${extension || ".bin"}`;
+}
+
+export function buildLearningAnswerKey(params: {
+  documentId: string;
+  filename: string;
+}) {
+  const extension = path.extname(params.filename).toLowerCase().replace(/[^.a-z0-9]/g, "");
+  return `documents/${params.documentId}/answer/file${extension || ".pdf"}`;
 }
 
 export function buildExamDocumentKey(params: {
@@ -46,6 +66,16 @@ export function buildExamDocumentKey(params: {
   filename: "de.pdf" | "dapan.pdf";
 }) {
   return `exams/${params.examId}/${params.filename}`;
+}
+
+export function buildExamRevisionKey(params: {
+  examId: string;
+  kind: "de" | "dapan";
+  revisionId: string;
+}) {
+  const revisionId = params.revisionId.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!revisionId) throw new Error("Mã phiên bản file không hợp lệ.");
+  return `exams/${params.examId}/${params.kind}-${revisionId}.pdf`;
 }
 
 export async function uploadDocument(
@@ -79,11 +109,36 @@ export async function readDocument(key: string): Promise<Uint8Array> {
   return result.Body.transformToByteArray();
 }
 
-export async function getSignedDocumentUrl(key: string, expiresInSeconds = 300) {
+export async function getSignedDocumentUrl(
+  key: string,
+  expiresInSeconds = 300,
+  contentDisposition?: string,
+) {
   if (!isR2Configured()) throw new Error("Signed URL chỉ dùng khi đã bật R2.");
   return getSignedUrl(
     getR2Client(),
-    new GetObjectCommand({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }),
+    new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+      ResponseContentDisposition: contentDisposition,
+    }),
+    { expiresIn: expiresInSeconds },
+  );
+}
+
+export async function getSignedUploadUrl(
+  key: string,
+  contentType: string,
+  expiresInSeconds = 300,
+) {
+  if (!isR2Configured()) throw new Error("Signed upload chỉ dùng khi đã bật R2.");
+  return getSignedUrl(
+    getR2Client(),
+    new PutObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME!,
+      Key: key,
+      ContentType: contentType,
+    }),
     { expiresIn: expiresInSeconds },
   );
 }

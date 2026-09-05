@@ -15,13 +15,15 @@ export type ClassMode = "Trực tiếp" | "Online";
 
 export type ClassSession = {
   id: string;
+  classId?: string;
   className: string;
   /** 0 = Chủ nhật ... 6 = Thứ 7 — đúng quy ước của TeachingSchedule.dayOfWeek */
   dayOfWeek: number;
   startTime: string; // "18:00"
   endTime: string; // "20:00"
   level: ClassLevel;
-  mode: ClassMode;
+  mode?: ClassMode;
+  status?: "ACTIVE" | "ARCHIVED";
 };
 
 /** Kết quả sau khi gom các buổi học theo ngày để render mỗi ngày 1 card. */

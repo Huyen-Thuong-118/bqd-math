@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
   buildExamDocumentKey,
+  buildExamRevisionKey,
   deleteDocument,
   uploadDocument,
 } from "@/lib/storage";
@@ -21,6 +22,7 @@ type CreateExamResult =
   | { success: true; examId: string }
   | { success: false; error: string };
 type SimpleResult = { success: true } | { success: false; error: string };
+type UpdateExamResult = { success: true } | { success: false; error: string };
 type AnalyzeResult =
   | {
       success: true;
@@ -46,6 +48,11 @@ function parsePositiveInteger(value: string, nullable = false) {
   if (!value && nullable) return null;
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+function parsePositiveNumber(value: string, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 && number <= 100 ? number : fallback;
 }
 
 function parseSections(raw: string): ExamSection[] | null {
@@ -236,6 +243,15 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
       .filter((value): value is string => typeof value === "string");
     const examPdf = formData.get("examPdf");
     const answerPdf = formData.get("answerPdf");
+    const publishNow = checked(formData, "publishNow");
+    const pointByType = {
+      MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25),
+      TRUE_FALSE: parsePositiveNumber(text(formData, "trueFalsePoints"), 1),
+      SHORT_ANSWER: parsePositiveNumber(text(formData, "shortAnswerPoints"), 0.5),
+    };
+    const trueFalseFractions = text(formData, "trueFalsePolicy") === "ALL_OR_NOTHING"
+      ? [0, 0, 0, 0, 1]
+      : [0, 0.1, 0.25, 0.5, 1];
 
     if (title.length < 3 || title.length > 150) {
       return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
@@ -320,6 +336,9 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
         id: examId,
         title,
         mode,
+        status: publishNow ? "PUBLISHED" : "DRAFT",
+        publishedAt: publishNow ? new Date() : null,
+        scoringPolicy: { trueFalseFractions, pointByType },
         examFileUrl: examKey,
         answerFileUrl: answerKeyFile,
         showAnswer: Boolean(answerKeyFile) && checked(formData, "showAnswer"),
@@ -346,12 +365,7 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
                   ? ["a", "b", "c", "d"]
                   : [],
             correctAnswer: correctAnswer.trim().toUpperCase(),
-            points:
-              questionTypes[index] === "MULTIPLE_CHOICE"
-                ? 0.25
-                : questionTypes[index] === "TRUE_FALSE"
-                  ? 1
-                  : 0.5,
+            points: pointByType[questionTypes[index]],
           })),
         },
       },
@@ -363,6 +377,161 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
     if (examKey) await deleteDocument(examKey).catch(() => undefined);
     if (answerKeyFile) await deleteDocument(answerKeyFile).catch(() => undefined);
     return { success: false, error: "Không thể tạo đề, vui lòng thử lại." };
+  }
+}
+
+export async function createExamFromQuestionBank(formData: FormData): Promise<CreateExamResult> {
+  try {
+    await requireActiveAdminId();
+    const title = text(formData, "title");
+    const mode = text(formData, "mode") === "PRACTICE" ? "PRACTICE" : "MOCK";
+    const durationMinutes = parsePositiveInteger(text(formData, "durationMinutes"), mode === "PRACTICE");
+    const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
+    const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
+    const questionIds = [...new Set(formData.getAll("questionIds").filter((item): item is string => typeof item === "string"))];
+    if (title.length < 3 || title.length > 150) return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
+    if (!classIds.length || !questionIds.length || questionIds.length > 200) return { success: false, error: "Hãy chọn lớp và từ 1 đến 200 câu hỏi." };
+    if (mode === "MOCK" && durationMinutes === undefined) return { success: false, error: "Thời lượng phải là số nguyên dương." };
+    if (maxAttempts === undefined) return { success: false, error: "Số lượt làm không hợp lệ." };
+    const [classCount, questions] = await Promise.all([
+      db.class.count({ where: { id: { in: classIds }, status: "ACTIVE" } }),
+      db.reviewQuestion.findMany({ where: { id: { in: questionIds } }, select: { id: true, content: true, type: true, options: true, correctAnswer: true, textSolution: true } }),
+    ]);
+    if (classCount !== classIds.length || questions.length !== questionIds.length) return { success: false, error: "Có lớp hoặc câu hỏi không còn hợp lệ." };
+    const byId = new Map(questions.map((question) => [question.id, question]));
+    const ordered = questionIds.map((id) => byId.get(id)!);
+    const publishNow = checked(formData, "publishNow");
+    const pointByType = { MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25), TRUE_FALSE: parsePositiveNumber(text(formData, "trueFalsePoints"), 1), SHORT_ANSWER: parsePositiveNumber(text(formData, "shortAnswerPoints"), 0.5) };
+    const exam = await db.exam.create({ data: { title, mode, examFileUrl: "", durationMinutes: durationMinutes ?? null, maxAttempts: maxAttempts ?? null, status: publishNow ? "PUBLISHED" : "DRAFT", publishedAt: publishNow ? new Date() : null, isForever: true, scoringPolicy: { trueFalseFractions: [0, 0.1, 0.25, 0.5, 1], pointByType }, examLinks: { create: classIds.map((classId) => ({ classId })) }, questions: { create: ordered.map((question, index) => ({ number: index + 1, content: question.content, type: question.type, options: Array.isArray(question.options) ? question.options.filter((item): item is string => typeof item === "string") : [], correctAnswer: question.correctAnswer, explanation: question.textSolution, points: pointByType[question.type] })) } }, select: { id: true } });
+    revalidatePath(ADMIN_EXAMS_PATH); revalidatePath("/thi-thu");
+    return { success: true, examId: exam.id };
+  } catch (error) { console.error("createExamFromQuestionBank thất bại:", error); return { success: false, error: "Không thể tạo đề từ ngân hàng câu hỏi." }; }
+}
+
+export async function updateExam(examId: string, formData: FormData): Promise<UpdateExamResult> {
+  let uploadedExamKey: string | undefined;
+  let uploadedAnswerKey: string | undefined;
+  try {
+    await requireActiveAdminId();
+    const current = await db.exam.findUnique({
+      where: { id: examId },
+      select: {
+        examFileUrl: true,
+        answerFileUrl: true,
+        questions: { select: { id: true, type: true }, orderBy: { number: "asc" } },
+      },
+    });
+    if (!current) return { success: false, error: "Không tìm thấy đề thi." };
+
+    const title = text(formData, "title");
+    const mode = text(formData, "mode") === "PRACTICE" ? "PRACTICE" : "MOCK";
+    const isForever = checked(formData, "isForever");
+    const durationMinutes = parsePositiveInteger(text(formData, "durationMinutes"), mode === "PRACTICE");
+    const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
+    const availableFromRaw = text(formData, "availableFrom");
+    const availableToRaw = text(formData, "availableTo");
+    const availableFrom = !isForever && availableFromRaw ? new Date(availableFromRaw) : null;
+    const availableTo = !isForever && availableToRaw ? new Date(availableToRaw) : null;
+    const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
+    const examPdf = formData.get("examPdf");
+    const answerPdf = formData.get("answerPdf");
+    const removeSolution = checked(formData, "removeSolution");
+    const pointByType = {
+      MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25),
+      TRUE_FALSE: parsePositiveNumber(text(formData, "trueFalsePoints"), 1),
+      SHORT_ANSWER: parsePositiveNumber(text(formData, "shortAnswerPoints"), 0.5),
+    };
+    const trueFalseFractions = text(formData, "trueFalsePolicy") === "ALL_OR_NOTHING"
+      ? [0, 0, 0, 0, 1]
+      : [0, 0.1, 0.25, 0.5, 1];
+
+    if (title.length < 3 || title.length > 150) return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
+    if (!classIds.length) return { success: false, error: "Hãy giao đề cho ít nhất một lớp." };
+    if (mode === "MOCK" && durationMinutes === undefined) return { success: false, error: "Thời lượng thi phải là số nguyên dương." };
+    if (maxAttempts === undefined) return { success: false, error: "Số lượt làm không hợp lệ." };
+    if ((!isForever && (!availableFrom || !availableTo)) || (availableFrom && Number.isNaN(availableFrom.getTime())) || (availableTo && Number.isNaN(availableTo.getTime())) || (availableFrom && availableTo && availableFrom >= availableTo)) {
+      return { success: false, error: "Khung thời gian giao đề không hợp lệ." };
+    }
+    const examPdfError = validatePdf(examPdf, false);
+    if (examPdfError) return { success: false, error: examPdfError };
+    const answerPdfError = validatePdf(answerPdf, false);
+    if (answerPdfError) return { success: false, error: answerPdfError };
+    if (removeSolution && answerPdf instanceof File && answerPdf.size > 0) {
+      return { success: false, error: "Chỉ chọn thay file lời giải hoặc xóa lời giải, không chọn cả hai." };
+    }
+
+    let answers: unknown;
+    try { answers = JSON.parse(text(formData, "answerKey")); } catch { answers = null; }
+    if (!Array.isArray(answers) || answers.length !== current.questions.length) {
+      return { success: false, error: "Vui lòng nhập đủ đáp án cho mọi câu." };
+    }
+    const invalidAnswer = answers.some((answer, index) => typeof answer !== "string" || !answerMatchesType(answer.trim().toUpperCase(), current.questions[index].type));
+    if (invalidAnswer) return { success: false, error: "Đáp án không đúng định dạng của từng loại câu hỏi." };
+
+    const classCount = await db.class.count({ where: { id: { in: classIds }, status: "ACTIVE" } });
+    if (classCount !== classIds.length) return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
+
+    if (examPdf instanceof File && examPdf.size > 0) {
+      const bytes = Buffer.from(await examPdf.arrayBuffer());
+      if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) return { success: false, error: "File đề không phải PDF hợp lệ." };
+      uploadedExamKey = buildExamRevisionKey({ examId, kind: "de", revisionId: randomUUID() });
+      await uploadDocument(uploadedExamKey, bytes);
+    }
+    if (answerPdf instanceof File && answerPdf.size > 0) {
+      const bytes = Buffer.from(await answerPdf.arrayBuffer());
+      if (!bytes.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+        if (uploadedExamKey) {
+          await deleteDocument(uploadedExamKey).catch(() => undefined);
+          uploadedExamKey = undefined;
+        }
+        return { success: false, error: "File lời giải không phải PDF hợp lệ." };
+      }
+      uploadedAnswerKey = buildExamRevisionKey({ examId, kind: "dapan", revisionId: randomUUID() });
+      await uploadDocument(uploadedAnswerKey, bytes);
+    }
+    const nextAnswerUrl = uploadedAnswerKey ?? (removeSolution ? null : current.answerFileUrl);
+
+    await db.$transaction([
+      db.exam.update({
+        where: { id: examId },
+        data: {
+          title,
+          mode,
+          examFileUrl: uploadedExamKey ?? current.examFileUrl,
+          answerFileUrl: nextAnswerUrl,
+          showAnswer: Boolean(nextAnswerUrl) && checked(formData, "showAnswer"),
+          isForever,
+          availableFrom,
+          availableTo,
+          durationMinutes: durationMinutes ?? null,
+          maxAttempts: maxAttempts ?? null,
+          allowDownload: checked(formData, "allowDownload"),
+          hideWrongAnswers: checked(formData, "hideWrongAnswers"),
+          scoringPolicy: { trueFalseFractions, pointByType },
+          examLinks: { deleteMany: {}, create: classIds.map((classId) => ({ classId })) },
+        },
+      }),
+      ...current.questions.map((question, index) => db.examQuestion.update({
+        where: { id: question.id },
+        data: {
+          correctAnswer: String(answers[index]).trim().toUpperCase(),
+          points: pointByType[question.type],
+        },
+      })),
+    ]);
+
+    if (uploadedExamKey && current.examFileUrl) await deleteDocument(current.examFileUrl).catch(() => undefined);
+    if ((uploadedAnswerKey || removeSolution) && current.answerFileUrl) await deleteDocument(current.answerFileUrl).catch(() => undefined);
+    revalidatePath(ADMIN_EXAMS_PATH);
+    revalidatePath(`${ADMIN_EXAMS_PATH}/${examId}/chinh-sua`);
+    revalidatePath("/thi-thu");
+    revalidatePath(`/thi-thu/${examId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("updateExam thất bại:", error);
+    if (uploadedExamKey) await deleteDocument(uploadedExamKey).catch(() => undefined);
+    if (uploadedAnswerKey) await deleteDocument(uploadedAnswerKey).catch(() => undefined);
+    return { success: false, error: "Không thể cập nhật đề thi." };
   }
 }
 
@@ -393,7 +562,7 @@ export async function closeExam(examId: string): Promise<SimpleResult> {
     await requireActiveAdminId();
     await db.exam.update({
       where: { id: examId },
-      data: { isForever: false, availableTo: new Date() },
+      data: { status: "CLOSED", isForever: false, availableTo: new Date() },
     });
     revalidatePath(ADMIN_EXAMS_PATH);
     return { success: true };
@@ -401,4 +570,17 @@ export async function closeExam(examId: string): Promise<SimpleResult> {
     console.error("closeExam thất bại:", error);
     return { success: false, error: "Không thể đóng đề." };
   }
+}
+
+
+export async function publishExam(examId: string): Promise<SimpleResult> {
+  try {
+    await requireActiveAdminId();
+    const exam = await db.exam.findUnique({ where: { id: examId }, select: { status: true, _count: { select: { questions: true, examLinks: true } } } });
+    if (!exam) return { success: false, error: "Không tìm thấy đề." };
+    if (!exam._count.questions || !exam._count.examLinks) return { success: false, error: "Đề phải có câu hỏi và ít nhất một lớp trước khi xuất bản." };
+    await db.exam.update({ where: { id: examId }, data: { status: "PUBLISHED", publishedAt: new Date() } });
+    revalidatePath(ADMIN_EXAMS_PATH); revalidatePath("/thi-thu");
+    return { success: true };
+  } catch (error) { console.error("publishExam thất bại:", error); return { success: false, error: "Không thể xuất bản đề." }; }
 }
