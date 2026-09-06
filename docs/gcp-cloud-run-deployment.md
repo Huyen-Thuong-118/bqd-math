@@ -8,6 +8,25 @@ Kiến trúc production:
 - Artifact Registry giữ image; Cloud Build migrate, build và deploy.
 - Secret Manager giữ mật khẩu và API key; không tạo JSON service-account key.
 
+## Cách nhanh: chạy toàn bộ phần còn lại một lần
+
+Sau khi Cloud SQL, database, `db-password`, bucket, Artifact Registry và
+`bqdmath-runtime` đã được tạo như bên dưới, chỉ cần:
+
+```bash
+cd ~/bqd-math
+git pull
+bash scripts/deploy-gcp-production.sh
+```
+
+Script tự cấp IAM, tạo các khóa ngẫu nhiên còn thiếu, migration, seed ADMIN,
+build/deploy, cấu hình Auth URL, CORS và Cloud Scheduler. Script chỉ hỏi các giá
+trị nó không thể tự sinh: Gemini API key, Resend API key/email gửi và thông tin
+đăng nhập ADMIN. Nếu bước nào lỗi, script dừng ngay và có thể chạy lại an toàn;
+các tài nguyên/secret đã tạo sẽ được tái sử dụng.
+
+Các mục tiếp theo giải thích từng bước mà script thực hiện.
+
 Các tên mặc định trong repo khớp project hiện tại:
 
 ```bash
