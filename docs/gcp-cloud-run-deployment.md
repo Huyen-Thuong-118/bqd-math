@@ -25,7 +25,7 @@ Runbook này dùng cho môi trường production, không phải bản demo tạm
    các lệnh dưới đây ngay tại repo trên máy local sau khi cài `gcloud`.
 
 ```bash
-git clone https://github.com/Huyen-Thuong-118/Math_website.git bqd-math
+git clone https://github.com/Huyen-Thuong-118/bqd-math.git
 cd bqd-math
 ```
 
