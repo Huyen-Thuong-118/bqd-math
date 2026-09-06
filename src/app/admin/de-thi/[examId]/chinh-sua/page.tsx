@@ -5,7 +5,7 @@ import { requireActiveAdminId } from "@/features/exams/admin";
 import { ExamEditForm } from "@/features/exams/components/ExamEditForm";
 import type { ExamQuestionType } from "@/features/exams/types";
 import { db } from "@/lib/db";
-import { isR2Configured } from "@/lib/storage";
+import { isCloudStorageConfigured } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "Chỉnh sửa đề thi | BQD Math" };
 export const dynamic = "force-dynamic";
@@ -84,7 +84,7 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
       <div><h1 className="text-xl font-semibold text-navy-600">Chỉnh sửa đề thi</h1><p className="mt-1 text-sm text-navy-300">Cập nhật cấu hình, lớp được giao, file PDF, đáp án và thang điểm.</p></div>
       <ExamEditForm
         classes={classes}
-        directUpload={isR2Configured()}
+        directUpload={isCloudStorageConfigured()}
         exam={{
           id: exam.id,
           title: exam.title,

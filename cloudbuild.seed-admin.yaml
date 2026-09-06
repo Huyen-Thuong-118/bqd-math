@@ -13,7 +13,7 @@ steps:
       - /workspace/cloud-sql-proxy
       - https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v${_CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64
 
-  - id: migrate-production-database
+  - id: seed-production-admin
     name: node:22-bookworm-slim
     entrypoint: bash
     env:
@@ -21,8 +21,12 @@ steps:
       - DB_PORT=5432
       - DB_NAME=${_DB_NAME}
       - DB_USER=${_DB_USER}
+      - SEED_DEMO_DATA=false
     secretEnv:
       - DB_PASSWORD
+      - SEED_ADMIN_EMAIL
+      - SEED_ADMIN_PHONE
+      - SEED_ADMIN_PASSWORD
     args:
       - -ceu
       - |
@@ -30,12 +34,18 @@ steps:
         /workspace/cloud-sql-proxy "$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE}" --port 5432 &
         sleep 3
         npm ci
-        npm run db:migrate:deploy
+        npm run seed
 
 availableSecrets:
   secretManager:
     - versionName: projects/$PROJECT_ID/secrets/db-password/versions/latest
       env: DB_PASSWORD
+    - versionName: projects/$PROJECT_ID/secrets/seed-admin-email/versions/latest
+      env: SEED_ADMIN_EMAIL
+    - versionName: projects/$PROJECT_ID/secrets/seed-admin-phone/versions/latest
+      env: SEED_ADMIN_PHONE
+    - versionName: projects/$PROJECT_ID/secrets/seed-admin-password/versions/latest
+      env: SEED_ADMIN_PASSWORD
 
 options:
   logging: CLOUD_LOGGING_ONLY

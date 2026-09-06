@@ -41,11 +41,11 @@ file và thao tác mở/ẩn lời giải hoặc đóng đề ngay.
 
 ## Storage
 
-Khi đủ bốn biến `R2_*`, file lưu private trên Cloudflare R2. Khi local chưa có
-R2, file lưu ở `storage/uploads/` (đã gitignore) để chạy độc lập ngay. Cả hai
+Khi có `GCS_BUCKET_NAME`, file lưu private trên Google Cloud Storage. Khi local
+chưa có bucket, file lưu ở `storage/uploads/` (đã gitignore). Cả hai
 backend dùng chung key và API quyền nên không đổi giao diện khi chuyển môi trường.
 
-PDF production được upload trực tiếp từ trình duyệt lên R2 bằng presigned URL;
+PDF production được upload trực tiếp từ trình duyệt lên Cloud Storage bằng signed URL;
 Server Action chỉ nhận storage key và metadata nhỏ. Server kiểm tra quyền admin,
 kích thước object, Content-Type và magic bytes `%PDF-` trước khi lưu vào database.
 

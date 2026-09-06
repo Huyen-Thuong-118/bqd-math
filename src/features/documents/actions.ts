@@ -11,7 +11,7 @@ import {
   deleteDocument as deleteStoredFile,
   getDocumentMetadata,
   getSignedUploadUrl,
-  isR2Configured,
+  isCloudStorageConfigured,
   uploadDocument,
 } from "@/lib/storage";
 
@@ -71,7 +71,7 @@ export async function prepareDocumentUpload(
 ): Promise<UploadTargetResult> {
   try {
     await requireActiveAdminId();
-    if (!isR2Configured()) return { success: false, error: "Direct upload chỉ bật khi đã cấu hình R2." };
+    if (!isCloudStorageConfigured()) return { success: false, error: "Direct upload chỉ bật khi đã cấu hình Google Cloud Storage." };
     if (!/^[a-z0-9-]{10,100}$/i.test(documentId) || !Number.isInteger(version) || version < 1 || fileName.length > 180 || !Number.isFinite(fileSize) || fileSize <= 0 || fileSize > MAX_FILE_BYTES) {
       return { success: false, error: "Thông tin upload không hợp lệ." };
     }

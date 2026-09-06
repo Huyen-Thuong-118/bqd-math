@@ -28,7 +28,7 @@ Module đề thi, lượt làm bài, autosave, chấm điểm và kết quả.
   đúng/sai và câu trả lời ngắn. Đúng/sai được chấm điểm từng ý.
 - `PdfViewer` render PDF canvas có scroll, zoom, watermark và ẩn thao tác tải.
 - Route file kiểm tra session, lớp, trạng thái nộp và cấu hình giáo viên trước
-  khi trả dữ liệu; storage dùng R2 hoặc fallback private local.
+  khi trả dữ liệu; storage dùng Google Cloud Storage hoặc fallback private local.
 
 ## Chưa triển khai
 

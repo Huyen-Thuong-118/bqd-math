@@ -72,7 +72,7 @@ Ký hiệu:
 | Quản lý tài khoản HS | Đã có | Duyệt, từ chối, khóa, kích hoạt |
 | Dashboard admin | Đã có | Có số liệu tổng quan từ database |
 | Quản lý lớp | Chưa có | Có model và route, chưa có CRUD/UI |
-| Kho tài liệu | Chưa có | Có model và R2 client, chưa có luồng sử dụng |
+| Kho tài liệu | Chưa có | Có model và Cloud Storage client, chưa có luồng sử dụng |
 | Câu hỏi ôn tập | Chưa có | Có model, route còn placeholder |
 | Tạo/giao đề | Chưa có | Có model cơ bản, chưa có UI và answer key chuẩn |
 | Làm bài | Đã có lát cắt lõi | Danh sách đề thật, timer, autosave, reload và ownership |
@@ -173,7 +173,7 @@ chưa có một luồng học tập hoàn chỉnh từ đầu đến cuối.
 
 #### Giải pháp
 
-- Metadata nằm trong PostgreSQL; file thật lưu Cloudflare R2.
+- Metadata nằm trong PostgreSQL; file thật lưu Google Cloud Storage.
 - Client upload qua signed URL để file lớn không đi xuyên qua Next.js server.
 - URL xem/tải có hạn sử dụng ngắn.
 - PDF viewer dùng PDF.js/canvas và watermark tên học sinh khi cần.
@@ -339,14 +339,14 @@ PostgreSQL + Prisma
   ├── dữ liệu nghiệp vụ
   └── migration có version trong Git
 
-R2: PDF/tài liệu       Stream: video       Resend/SMS: thông báo
+Cloud Storage: PDF/tài liệu       Stream: video       Resend/SMS: thông báo
 ```
 
 Lý do:
 
 - Hai người phát triển vẫn hiểu và deploy dễ dàng.
 - Transaction nghiệp vụ nằm chung một process và database.
-- Vercel có thể scale web theo tải; PostgreSQL pooler quản lý connection.
+- Cloud Run scale web theo tải; Cloud SQL connector quản lý kết nối bảo mật.
 - Chỉ tách worker/queue khi chấm bài hoặc gửi thông báo thực sự nặng.
 
 ### 5.2. Quy ước folder theo lát cắt dọc
@@ -543,7 +543,7 @@ lát cắt này; dữ liệu seed giúp kiểm chứng lõi làm bài trước.
 
 ### Lát cắt 5 — Kho tài liệu
 
-- Folder tree, upload R2, signed URL, PDF viewer.
+- Folder tree, upload Cloud Storage, signed URL, PDF viewer.
 - Gán tài liệu cho lớp và cấu hình tải/đáp án.
 
 ### Lát cắt 6 — Lịch dạy và thông báo
@@ -609,7 +609,7 @@ Một tính năng chỉ được xem là hoàn thành khi:
 - Auth: Auth.js/NextAuth v5, JWT session.
 - Local DB: PostgreSQL 16 bằng Docker Compose.
 - Hosting dự kiến: Vercel.
-- PDF/tài liệu: Cloudflare R2.
+- PDF/tài liệu: Google Cloud Storage.
 - Video: Cloudflare Stream.
 - Email: Resend.
 - Kiến trúc: modular monolith, feature-first, triển khai theo lát cắt dọc.

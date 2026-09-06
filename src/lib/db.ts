@@ -10,27 +10,54 @@ dns.setDefaultResultOrder("ipv4first");
 /**
  * Prisma 7: PrismaClient KHÔNG còn tự đọc connection string từ đâu cả —
  * bắt buộc phải truyền vào 1 "driver adapter". Ở đây dùng @prisma/adapter-pg
- * (chạy trên "pg" — driver Postgres chuẩn qua TCP), hoạt động tốt với cả
- * Neon lẫn Supabase vì cả 2 đều expose connection string Postgres chuẩn.
- *
- * DATABASE_URL dùng ở đây PHẢI là connection string QUA POOLER — khác với
- * prisma.config.ts (dùng DIRECT_URL cho migrate). Xem README mục
- * "Vì sao có prisma.config.ts" để hiểu rõ 2 file này chia việc thế nào.
+ * (chạy trên "pg" — driver Postgres chuẩn). Trên Cloud Run, app kết nối
+ * Cloud SQL qua Unix socket do Cloud Run cung cấp; ở local vẫn dùng URL.
  *
  * Singleton pattern giữ nguyên — tránh tạo nhiều Pool khi Next.js hot-reload.
  */
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 function createPrismaClient() {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-    // Driver "pg" không đọc query param "connection_limit" trong URL (đó
-    // là tham số riêng của Prisma engine cũ) — phải giới hạn ở đây. Giữ
-    // nhỏ vì đây là serverless: mỗi function instance nên chỉ giữ ít
-    // connection, để pooler (PgBouncer/Neon pooler) lo phần scale ra
-    // nhiều instance. Xem docs/security.md / docs/architecture.md.
-    max: 3,
-  });
+  const cloudSqlConnectionName = process.env.CLOUD_SQL_CONNECTION_NAME?.trim();
+  let adapter: PrismaPg;
+
+  if (cloudSqlConnectionName) {
+    const required = ["DB_USER", "DB_PASSWORD", "DB_NAME"] as const;
+    const missing = required.filter((name) => !process.env[name]?.trim());
+    if (missing.length > 0) {
+      throw new Error(`Thiếu biến môi trường Cloud SQL: ${missing.join(", ")}.`);
+    }
+
+    adapter = new PrismaPg({
+      host: `/cloudsql/${cloudSqlConnectionName}`,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      max: 3,
+    });
+  } else if (process.env.DB_HOST?.trim()) {
+    const required = ["DB_USER", "DB_PASSWORD", "DB_NAME"] as const;
+    const missing = required.filter((name) => !process.env[name]?.trim());
+    if (missing.length > 0) {
+      throw new Error(`Thiếu biến môi trường PostgreSQL: ${missing.join(", ")}.`);
+    }
+
+    adapter = new PrismaPg({
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT || 5432),
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      max: 3,
+    });
+  } else {
+    const connectionString = process.env.DATABASE_URL?.trim();
+    if (!connectionString) {
+      throw new Error("Thiếu DATABASE_URL hoặc CLOUD_SQL_CONNECTION_NAME.");
+    }
+    adapter = new PrismaPg({ connectionString, max: 3 });
+  }
+
   return new PrismaClient({ adapter });
 }
 

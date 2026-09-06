@@ -173,7 +173,7 @@ export function ExamCreateForm({ classes, directUpload }: { classes: ClassOption
 
   return (
     <form action={handleSubmit} className="space-y-6">
-      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Cloudflare R2. Không nên tạo đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
+      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên tạo đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
           <label className="text-sm font-medium text-navy-500 sm:col-span-2">Tên đề<input name="title" required minLength={3} maxLength={150} className={inputClass} placeholder="Ví dụ: Đề thi tốt nghiệp THPT 2026 — mã 0102" /></label>

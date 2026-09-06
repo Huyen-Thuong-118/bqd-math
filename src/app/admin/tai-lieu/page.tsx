@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { AdminDocumentsManager } from "@/features/documents/components/AdminDocumentsManager";
 import { db } from "@/lib/db";
-import { isR2Configured } from "@/lib/storage";
+import { isCloudStorageConfigured } from "@/lib/storage";
 
 export const metadata: Metadata = {
   title: "Tài liệu | BQD Math",
@@ -36,7 +36,7 @@ export default async function AdminDocumentsPage() {
     <section className="space-y-5">
       <h1 className="text-xl font-semibold text-navy-600">Tài liệu</h1>
       <p className="-mt-4 text-sm text-navy-300">Thư mục nhiều cấp, phiên bản file và quyền xem theo lớp.</p>
-      <AdminDocumentsManager folders={flattenFolders(folderRows)} classes={classes} documents={documents} directUpload={isR2Configured()} />
+      <AdminDocumentsManager folders={flattenFolders(folderRows)} classes={classes} documents={documents} directUpload={isCloudStorageConfigured()} />
     </section>
   );
 }

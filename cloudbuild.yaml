@@ -2,6 +2,10 @@ substitutions:
   _REGION: asia-southeast1
   _REPOSITORY: bqdmath
   _SERVICE: bqdmath-web
+  _CLOUD_SQL_INSTANCE: bqdmath-postgres
+  _DB_NAME: bqdmath
+  _DB_USER: bqdmath
+  _GCS_BUCKET: bqd-math-507809-bqdmath-files
 
 steps:
   - id: build-image
@@ -37,6 +41,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --service-account=bqdmath-runtime@$PROJECT_ID.iam.gserviceaccount.com
+      - --add-cloudsql-instances=$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE}
       - --port=8080
       - --cpu=1
       - --memory=1Gi
@@ -45,8 +50,8 @@ steps:
       - --max-instances=10
       - --timeout=300s
       - --execution-environment=gen2
-      - --update-env-vars=AUTH_TRUST_HOST=true,GEMINI_MODEL=gemini-3.1-flash-lite,DEPLOYMENT_VERSION=$BUILD_ID
-      - --update-secrets=DATABASE_URL=database-url:latest,AUTH_SECRET=auth-secret:latest,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=next-server-actions-key:latest,R2_ACCOUNT_ID=r2-account-id:latest,R2_ACCESS_KEY_ID=r2-access-key-id:latest,R2_SECRET_ACCESS_KEY=r2-secret-access-key:latest,R2_BUCKET_NAME=r2-bucket-name:latest,GEMINI_API_KEY=gemini-api-key:latest,RESEND_API_KEY=resend-api-key:latest,EMAIL_FROM=email-from:latest,RESET_TOKEN_SECRET=reset-token-secret:latest,CRON_SECRET=cron-secret:latest
+      - --update-env-vars=AUTH_TRUST_HOST=true,CLOUD_SQL_CONNECTION_NAME=$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},GCS_BUCKET_NAME=${_GCS_BUCKET},GEMINI_MODEL=gemini-3.1-flash-lite,DEPLOYMENT_VERSION=$BUILD_ID
+      - --update-secrets=DB_PASSWORD=db-password:latest,AUTH_SECRET=auth-secret:latest,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=next-server-actions-key:latest,GEMINI_API_KEY=gemini-api-key:latest,RESEND_API_KEY=resend-api-key:latest,EMAIL_FROM=email-from:latest,RESET_TOKEN_SECRET=reset-token-secret:latest,CRON_SECRET=cron-secret:latest
 
 availableSecrets:
   secretManager:

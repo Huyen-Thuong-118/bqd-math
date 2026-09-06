@@ -35,7 +35,7 @@ export function AdminDocumentsManager({ folders, classes, documents, directUploa
     const target = await prepareDocumentUpload(documentId, version, file.name, file.type || "application/octet-stream", kind, file.size);
     if (!target.success) throw new Error(target.error);
     const response = await fetch(target.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-    if (!response.ok) throw new Error("Cloudflare R2 từ chối file upload.");
+    if (!response.ok) throw new Error("Google Cloud Storage từ chối file upload.");
     return target.key;
   }
 

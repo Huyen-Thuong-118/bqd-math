@@ -10,7 +10,7 @@ import {
   deleteDocument,
   getDocumentMetadata,
   getSignedUploadUrl,
-  isR2Configured,
+  isCloudStorageConfigured,
   readDocument,
   readDocumentPrefix,
   uploadDocument,
@@ -144,8 +144,8 @@ export async function prepareExamUpload(
 ): Promise<UploadTargetResult> {
   try {
     await requireActiveAdminId();
-    if (!isR2Configured()) {
-      return { success: false, error: "Cloudflare R2 chưa được cấu hình đầy đủ." };
+    if (!isCloudStorageConfigured()) {
+      return { success: false, error: "Google Cloud Storage chưa được cấu hình đầy đủ." };
     }
     if (
       !validUploadId(examId) ||

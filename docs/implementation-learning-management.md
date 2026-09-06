@@ -10,7 +10,7 @@ tài liệu, câu hỏi ôn tập và hoàn thiện thêm vòng đời đề thi
   trữ giữ lịch sử nhưng không nhận nội dung mới.
 - Thư mục nhiều cấp; tài liệu gán nhiều lớp; đổi tên, di chuyển, quyền tải,
   công bố đáp án và lịch sử phiên bản.
-- R2 signed PUT/GET thời hạn 5 phút; storage local private là fallback dev.
+- Cloud Storage signed PUT/GET thời hạn 5 phút; storage local private là fallback dev.
 - Ngân hàng câu hỏi theo chương/chủ đề/khối/độ khó, ba loại câu, lời giải chữ,
   ảnh và Cloudflare Stream UID; chấm server và lưu tiến độ.
 - Đề có `DRAFT/PUBLISHED/CLOSED`, xem trước, scoring policy, thống kê điểm,

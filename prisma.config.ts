@@ -1,6 +1,6 @@
 import "dotenv/config";
 import dns from "node:dns";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 /**
  * Ưu tiên phân giải DNS ra IPv4 trước IPv6. Từ Node 18, Node mặc định thử
@@ -17,10 +17,31 @@ dns.setDefaultResultOrder("ipv4first");
  * file này — CHỈ dùng bởi Prisma CLI (migrate, studio, db push...), không
  * ảnh hưởng app lúc chạy thật (app dùng driver adapter trong lib/db.ts).
  *
- * `url` ở đây PHẢI là connection string TRỰC TIẾP (không qua pooler), vì
- * lệnh migrate cần chạy DDL trực tiếp — dùng DIRECT_URL, không phải
- * DATABASE_URL. Xem README mục "Vì sao có prisma.config.ts".
+ * Local dùng DIRECT_URL. Trên Cloud Build, migration kết nối qua Cloud SQL
+ * Auth Proxy bằng các biến DB_USER, DB_PASSWORD và DB_NAME.
  */
+function getMigrationDatabaseUrl() {
+  const directUrl = process.env.DIRECT_URL?.trim();
+  if (directUrl) return directUrl;
+
+  const user = process.env.DB_USER?.trim();
+  const password = process.env.DB_PASSWORD;
+  const database = process.env.DB_NAME?.trim();
+  if (!user || !password || !database) {
+    throw new Error(
+      "Thiếu DIRECT_URL hoặc bộ biến DB_USER, DB_PASSWORD và DB_NAME để chạy migration.",
+    );
+  }
+
+  const url = new URL("postgresql://127.0.0.1:5432");
+  url.username = user;
+  url.password = password;
+  url.hostname = process.env.DB_HOST?.trim() || "127.0.0.1";
+  url.port = process.env.DB_PORT?.trim() || "5432";
+  url.pathname = `/${database}`;
+  return url.toString();
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -32,6 +53,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DIRECT_URL"),
+    url: getMigrationDatabaseUrl(),
   },
 });

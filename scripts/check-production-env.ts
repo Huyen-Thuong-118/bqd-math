@@ -1,14 +1,13 @@
 import "dotenv/config";
 
 const required = [
-  "DATABASE_URL",
-  "DIRECT_URL",
+  "CLOUD_SQL_CONNECTION_NAME",
+  "DB_USER",
+  "DB_PASSWORD",
+  "DB_NAME",
+  "GCS_BUCKET_NAME",
   "AUTH_SECRET",
   "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
-  "R2_ACCOUNT_ID",
-  "R2_ACCESS_KEY_ID",
-  "R2_SECRET_ACCESS_KEY",
-  "R2_BUCKET_NAME",
   "GEMINI_API_KEY",
   "RESEND_API_KEY",
   "EMAIL_FROM",
@@ -46,18 +45,9 @@ if (serverActionsKey) {
   }
 }
 
-for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
-  const value = process.env[key]?.trim();
-  if (value && /@(127\.0\.0\.1|localhost)(:|\/)/i.test(value)) {
-    errors.push(`${key} không được trỏ về PostgreSQL local`);
-  }
-  if (value && !/[?&]sslmode=require(?:&|$)/i.test(value)) {
-    errors.push(`${key} phải bật sslmode=require`);
-  }
-}
-
-if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("pooler")) {
-  console.warn("Cảnh báo: DATABASE_URL không có 'pooler'; hãy xác nhận đây là pooled connection string.");
+const cloudSqlName = process.env.CLOUD_SQL_CONNECTION_NAME?.trim();
+if (cloudSqlName && !/^[a-z][a-z0-9-]*:[a-z0-9-]+:[a-z][a-z0-9-]*$/.test(cloudSqlName)) {
+  errors.push("CLOUD_SQL_CONNECTION_NAME phải có dạng PROJECT_ID:REGION:INSTANCE");
 }
 
 const googleId = Boolean(process.env.GOOGLE_CLIENT_ID?.trim());

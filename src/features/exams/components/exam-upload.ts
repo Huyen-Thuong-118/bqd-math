@@ -34,8 +34,7 @@ export async function uploadExamPdf(params: {
     headers: { "Content-Type": "application/pdf" },
   });
   if (!response.ok) {
-    throw new Error(`Cloudflare R2 từ chối file upload (HTTP ${response.status}).`);
+    throw new Error(`Google Cloud Storage từ chối file upload (HTTP ${response.status}).`);
   }
   return target.key;
 }
-

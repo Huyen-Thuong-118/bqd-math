@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { getSignedDocumentUrl, isR2Configured, readDocument } from "@/lib/storage";
+import { getSignedDocumentUrl, isCloudStorageConfigured, readDocument } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ docu
   const filename = asciiFilename(kind === "answer" ? `dap-an-${document.fileName}` : document.fileName);
   const disposition = `${wantsDownload ? "attachment" : "inline"}; filename=\"${filename}\"`;
   try {
-    if (isR2Configured()) return Response.redirect(await getSignedDocumentUrl(key, 300, disposition));
+    if (isCloudStorageConfigured()) return Response.redirect(await getSignedDocumentUrl(key, 300, disposition));
     const bytes = await readDocument(key);
     return new Response(Buffer.from(bytes), { headers: { "Content-Type": kind === "answer" ? "application/pdf" : document.contentType, "Content-Disposition": disposition, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   } catch (cause) { console.error("Không thể đọc tài liệu:", cause); return error("Không thể đọc file.", 404); }

@@ -1,45 +1,28 @@
-# Deploy BQD Math lên Google Cloud Run
+# Deploy BQD Math hoàn toàn trên Google Cloud
 
-Runbook này dùng cho môi trường production, không phải bản demo tạm:
+Kiến trúc production:
 
-- **Cloud Run** chạy ứng dụng Next.js tại Singapore (`asia-southeast1`).
-- **Artifact Registry** giữ container image bất biến theo từng build.
-- **Cloud Build** build, push và tạo Cloud Run revision mới.
-- **Secret Manager** giữ password, connection string và API key.
-- **Cloud Scheduler** gọi tác vụ dọn tài khoản mỗi ngày.
-- PostgreSQL vẫn dùng **Neon** và file PDF vẫn dùng **Cloudflare R2**, vì code
-  hiện tại đã có pooler và upload trực tiếp cho hai dịch vụ này. Chuyển DB sang
-  Cloud SQL hoặc file sang Cloud Storage là một migration khác, không bắt buộc
-  để chạy ứng dụng trên GCP.
+- Cloud Run chạy ứng dụng Next.js.
+- Cloud SQL for PostgreSQL giữ dữ liệu.
+- Cloud Storage giữ PDF/tài liệu trong bucket private.
+- Artifact Registry giữ image; Cloud Build migrate, build và deploy.
+- Secret Manager giữ mật khẩu và API key; không tạo JSON service-account key.
 
-## 1. Tạo project và bật billing
-
-1. Mở <https://console.cloud.google.com/projectcreate>.
-2. Đặt tên `BQD Math Production` và chọn Project ID duy nhất, ví dụ
-   `bqdmath-prod-2026`. **Project ID không đổi được sau khi tạo.**
-3. Mở **Billing → My projects**, liên kết project với Billing Account.
-4. Mở Cloud Shell bằng biểu tượng `>_` trên thanh trên cùng. Cloud Shell đã có
-   `gcloud`; máy local chỉ cần cài Google Cloud CLI nếu không muốn dùng Cloud
-   Shell.
-5. Lấy code về Cloud Shell (repo private sẽ yêu cầu đăng nhập GitHub), hoặc chạy
-   các lệnh dưới đây ngay tại repo trên máy local sau khi cài `gcloud`.
+Các tên mặc định trong repo khớp project hiện tại:
 
 ```bash
-git clone https://github.com/Huyen-Thuong-118/bqd-math.git
-cd bqd-math
-```
-
-Khai báo đúng Project ID vừa tạo:
-
-```bash
-export GCP_PROJECT_ID="bqdmath-prod-2026"
+export GCP_PROJECT_ID="bqd-math-507809"
 export GCP_REGION="asia-southeast1"
+export SQL_INSTANCE="bqdmath-postgres"
+export DB_NAME="bqdmath"
+export DB_USER="bqdmath"
+export GCS_BUCKET="bqd-math-507809-bqdmath-files"
+export RUNTIME_SA="bqdmath-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+
 gcloud config set project "$GCP_PROJECT_ID"
-gcloud config set run/region "$GCP_REGION"
-gcloud config set builds/region global
 ```
 
-## 2. Bật API và tạo tài nguyên nền
+## 1. Bật API
 
 ```bash
 gcloud services enable \
@@ -47,271 +30,228 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   artifactregistry.googleapis.com \
   secretmanager.googleapis.com \
+  sqladmin.googleapis.com \
+  storage.googleapis.com \
+  iamcredentials.googleapis.com \
   cloudscheduler.googleapis.com
+```
 
-gcloud artifacts repositories create bqdmath \
-  --repository-format=docker \
+Artifact Registry `bqdmath` và service account `bqdmath-runtime` chỉ cần tạo
+một lần. Nếu đã có thì không chạy lại lệnh create.
+
+## 2. Tạo Cloud SQL PostgreSQL
+
+Cấu hình dưới đây là cấu hình khởi đầu cho production nhỏ: một zone, 1 vCPU,
+3.75 GiB RAM, backup và point-in-time recovery. `db-f1-micro` rẻ hơn nhưng là
+shared-core, không có SLA và dễ thiếu tài nguyên khi thi đông.
+
+```bash
+gcloud sql instances create "$SQL_INSTANCE" \
+  --database-version=POSTGRES_16 \
+  --edition=ENTERPRISE \
+  --region="$GCP_REGION" \
+  --tier=db-custom-1-3840 \
+  --availability-type=ZONAL \
+  --storage-type=SSD \
+  --storage-size=10 \
+  --storage-auto-increase \
+  --backup-start-time=18:00 \
+  --enable-point-in-time-recovery \
+  --retained-backups-count=7 \
+  --retained-transaction-log-days=7
+```
+
+Tạo database, user và lưu mật khẩu thẳng vào Secret Manager:
+
+```bash
+export GENERATED_DB_PASSWORD="$(openssl rand -base64 36 | tr -d '\n')"
+
+gcloud sql databases create "$DB_NAME" --instance="$SQL_INSTANCE"
+gcloud sql users create "$DB_USER" \
+  --instance="$SQL_INSTANCE" \
+  --password="$GENERATED_DB_PASSWORD"
+
+printf '%s' "$GENERATED_DB_PASSWORD" | \
+  gcloud secrets create db-password --data-file=-
+
+unset GENERATED_DB_PASSWORD
+```
+
+Nếu `db-password` đã tồn tại và cần cập nhật, dùng
+`gcloud secrets versions add db-password --data-file=-` thay cho `create`.
+
+## 3. Tạo Cloud Storage private bucket
+
+```bash
+gcloud storage buckets create "gs://$GCS_BUCKET" \
   --location="$GCP_REGION" \
-  --description="BQD Math production images"
-
-gcloud iam service-accounts create bqdmath-runtime \
-  --display-name="BQD Math Cloud Run runtime"
+  --uniform-bucket-level-access \
+  --public-access-prevention
 ```
 
-Nếu lệnh create báo resource đã tồn tại thì không tạo lại; tiếp tục bước sau.
+File không public. Ứng dụng tạo signed URL 5 phút để học sinh/giáo viên có
+quyền mới được đọc hoặc upload.
 
-## 3. Tạo các secret production
+## 4. Tạo các secret ứng dụng
 
-Vào **Security → Secret Manager → Create secret**. Tạo đúng các Secret ID sau;
-không thêm dấu nháy vào value.
+Các secret bắt buộc trong pipeline:
 
-| Secret ID | Giá trị |
-|---|---|
-| `database-url` | Neon pooled `DATABASE_URL`, có `sslmode=require` |
-| `direct-url` | Neon direct `DIRECT_URL`, có `sslmode=require` |
-| `auth-secret` | Kết quả của `openssl rand -base64 32` |
-| `next-server-actions-key` | Một kết quả khác của `openssl rand -base64 32` |
-| `r2-account-id` | Cloudflare account ID |
-| `r2-access-key-id` | R2 access key chỉ có quyền đúng bucket production |
-| `r2-secret-access-key` | R2 secret key |
-| `r2-bucket-name` | Tên private bucket production |
-| `gemini-api-key` | Gemini API key phía server |
-| `resend-api-key` | Resend API key |
-| `email-from` | Ví dụ `BQD Math <noreply@bqdmath.edu.vn>`; domain phải verify |
-| `reset-token-secret` | Một kết quả khác của `openssl rand -base64 32` |
-| `cron-secret` | Một kết quả khác của `openssl rand -base64 32` |
+- `db-password`
+- `auth-secret`, `next-server-actions-key`, `reset-token-secret`, `cron-secret`
+- `gemini-api-key`
+- `resend-api-key`, `email-from`
 
-Không dùng cùng một chuỗi cho `auth-secret`, `next-server-actions-key`,
-`reset-token-secret` và `cron-secret`. Không đưa secret vào Git, ảnh chụp màn
-hình hay nội dung chat.
-
-Nếu dùng Google Login, tạo thêm `google-client-id` và `google-client-secret`;
-sau lần deploy đầu sẽ gắn hai secret này vào Cloud Run ở bước 7.
-
-## 4. Cấp quyền tối thiểu
-
-Lấy service account thực sự Cloud Build đang dùng. Project mới có thể dùng
-Compute Engine default service account thay vì tên Cloud Build kiểu cũ, vì vậy
-không đoán email bằng tay:
+Bốn khóa ngẫu nhiên phải khác nhau. Ví dụ tạo một secret ngẫu nhiên:
 
 ```bash
-export BUILD_SERVICE_ACCOUNT="$(gcloud builds get-default-service-account)"
-export RUNTIME_SERVICE_ACCOUNT="bqdmath-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
-echo "$BUILD_SERVICE_ACCOUNT"
+openssl rand -base64 32 | gcloud secrets create auth-secret --data-file=-
 ```
 
-Cho runtime chỉ đọc các secret mà web cần:
+`email-from` là chuỗi như `BQD Math <noreply@tenmien.vn>`. Không lưu secret
+trong Git, ảnh chụp hoặc file JSON key.
+
+## 5. Cấp IAM
 
 ```bash
-RUNTIME_SECRETS=(
-  database-url auth-secret next-server-actions-key
-  r2-account-id r2-access-key-id r2-secret-access-key r2-bucket-name
-  gemini-api-key resend-api-key email-from reset-token-secret cron-secret
-)
+export BUILD_SA="$(gcloud builds get-default-service-account)"
 
-for SECRET_ID in "${RUNTIME_SECRETS[@]}"; do
+gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/cloudsql.client"
+
+gcloud storage buckets add-iam-policy-binding "gs://$GCS_BUCKET" \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/storage.objectAdmin"
+
+gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+for SECRET_ID in db-password auth-secret next-server-actions-key \
+  gemini-api-key resend-api-key email-from reset-token-secret cron-secret; do
   gcloud secrets add-iam-policy-binding "$SECRET_ID" \
-    --member="serviceAccount:$RUNTIME_SERVICE_ACCOUNT" \
+    --member="serviceAccount:$RUNTIME_SA" \
     --role="roles/secretmanager.secretAccessor"
 done
 ```
 
-Cho Cloud Build đẩy image, deploy revision, ghi log và chỉ đọc hai secret cần
-cho build/migration:
+Cloud Build cần migrate Cloud SQL, push image, deploy và gắn runtime service
+account:
 
 ```bash
-gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
-  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
-  --role="roles/artifactregistry.writer"
+for ROLE in roles/cloudsql.client roles/artifactregistry.writer \
+  roles/run.admin roles/logging.logWriter; do
+  gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
+    --member="serviceAccount:$BUILD_SA" \
+    --role="$ROLE"
+done
 
-gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
-  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
-  --role="roles/run.admin"
-
-gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
-  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
-  --role="roles/logging.logWriter"
-
-gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
-  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
-  --role="roles/storage.admin"
-
-gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SERVICE_ACCOUNT" \
-  --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
+gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+  --member="serviceAccount:$BUILD_SA" \
   --role="roles/iam.serviceAccountUser"
 
-for SECRET_ID in direct-url next-server-actions-key; do
+for SECRET_ID in db-password next-server-actions-key; do
   gcloud secrets add-iam-policy-binding "$SECRET_ID" \
-    --member="serviceAccount:$BUILD_SERVICE_ACCOUNT" \
+    --member="serviceAccount:$BUILD_SA" \
     --role="roles/secretmanager.secretAccessor"
 done
 ```
 
-## 5. Chạy migration rồi deploy
-
-Migration là bước riêng để lỗi schema không bị che trong lúc rollout web:
+## 6. Migration và deploy
 
 ```bash
 gcloud builds submit --config cloudbuild.migrate.yaml .
 gcloud builds submit --config cloudbuild.yaml .
 ```
 
-`cloudbuild.yaml` sẽ:
+Migration dùng Cloud SQL Auth Proxy trong Cloud Build. Cloud Run dùng Unix
+socket `/cloudsql/PROJECT:REGION:INSTANCE`; database không cần allowlist IP.
 
-1. build image Next.js standalone bằng khóa Server Actions từ Secret Manager;
-2. push image gắn tag bằng Cloud Build ID;
-3. tạo Cloud Run revision mới, chạy bằng user không phải root;
-4. cấu hình 1 CPU, RAM 1 GiB, tối đa 10 instance và timeout 300 giây.
-
-Lấy URL HTTPS ổn định của service:
+Lấy URL service và cấu hình Auth.js:
 
 ```bash
 export APP_URL="$(gcloud run services describe bqdmath-web \
-  --region="$GCP_REGION" \
-  --format='value(status.url)')"
-echo "$APP_URL"
-```
+  --region="$GCP_REGION" --format='value(status.url)')"
 
-Gắn URL này cho Auth.js rồi tạo revision cấu hình mới:
-
-```bash
 gcloud run services update bqdmath-web \
   --region="$GCP_REGION" \
   --update-env-vars="AUTH_URL=$APP_URL,NEXTAUTH_URL=$APP_URL"
+
+echo "$APP_URL"
 ```
 
-URL `run.app` là HTTPS production ổn định, có thể dùng ngay. Không dùng URL của
-một revision cụ thể.
+## 7. Cấu hình CORS cho upload trực tiếp
 
-## 6. Tạo ADMIN đầu tiên
-
-Trên máy tin cậy, tạo `.env.seed.production.local` chứa `DATABASE_URL`,
-`DIRECT_URL`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PHONE`, `SEED_ADMIN_PASSWORD`.
-Sau đó chạy đúng một lần:
+Sau khi có `$APP_URL`:
 
 ```bash
-DOTENV_CONFIG_PATH=.env.seed.production.local npm run seed
+jq -n --arg origin "$APP_URL" '[{
+  origin: [$origin],
+  method: ["GET", "HEAD", "PUT"],
+  responseHeader: ["Content-Type"],
+  maxAgeSeconds: 3600
+}]' > /tmp/bqdmath-gcs-cors.json
+
+gcloud storage buckets update "gs://$GCS_BUCKET" \
+  --cors-file=/tmp/bqdmath-gcs-cors.json
 ```
 
-Đăng nhập kiểm tra rồi xóa file này. Không chạy `seed:test-data` hoặc bật
-`SEED_DEMO_DATA` trên database thật.
+Khi thêm domain riêng, thêm cả domain đó vào mảng `origin` rồi apply lại.
 
-## 7. Google Login, R2 CORS và Cloud Scheduler
+## 8. Tạo ADMIN production
 
-### Google Login (nếu dùng)
-
-Trong Google OAuth Web Client, thêm:
-
-- Authorized JavaScript origin: giá trị `$APP_URL`
-- Authorized redirect URI: `$APP_URL/api/auth/callback/google`
-
-Cấp runtime quyền đọc hai secret tùy chọn rồi gắn chúng vào service:
+Nhập thông tin bằng prompt để mật khẩu không nằm trong shell history:
 
 ```bash
-for SECRET_ID in google-client-id google-client-secret; do
+read -r -p "Email ADMIN: " SEED_ADMIN_EMAIL_VALUE
+read -r -p "Số điện thoại ADMIN: " SEED_ADMIN_PHONE_VALUE
+read -r -s -p "Mật khẩu ADMIN mạnh: " SEED_ADMIN_PASSWORD_VALUE
+echo
+
+printf '%s' "$SEED_ADMIN_EMAIL_VALUE" | \
+  gcloud secrets create seed-admin-email --data-file=-
+printf '%s' "$SEED_ADMIN_PHONE_VALUE" | \
+  gcloud secrets create seed-admin-phone --data-file=-
+printf '%s' "$SEED_ADMIN_PASSWORD_VALUE" | \
+  gcloud secrets create seed-admin-password --data-file=-
+
+unset SEED_ADMIN_EMAIL_VALUE SEED_ADMIN_PHONE_VALUE SEED_ADMIN_PASSWORD_VALUE
+
+for SECRET_ID in seed-admin-email seed-admin-phone seed-admin-password; do
   gcloud secrets add-iam-policy-binding "$SECRET_ID" \
-    --member="serviceAccount:$RUNTIME_SERVICE_ACCOUNT" \
+    --member="serviceAccount:$BUILD_SA" \
     --role="roles/secretmanager.secretAccessor"
 done
 
-gcloud run services update bqdmath-web \
-  --region="$GCP_REGION" \
-  --update-secrets="GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest"
+gcloud builds submit --config cloudbuild.seed-admin.yaml .
 ```
 
-### R2 CORS
+Job này upsert đúng ADMIN, ép `SEED_DEMO_DATA=false` và không đưa database
+password về laptop. Không chạy `seed:test-data` trên production.
 
-Allowed origin của bucket phải có đúng `$APP_URL`; method là `PUT` và header là
-`Content-Type`. Bucket vẫn để private.
-
-### Cleanup hằng ngày
-
-Lấy cron secret vào biến tạm để giá trị thật không nằm trong shell history:
-
-```bash
-export CRON_VALUE="$(gcloud secrets versions access latest --secret=cron-secret)"
-
-gcloud scheduler jobs create http cleanup-suspended-accounts \
-  --location="$GCP_REGION" \
-  --schedule="0 3 * * *" \
-  --time-zone="Asia/Ho_Chi_Minh" \
-  --uri="$APP_URL/api/cron/cleanup-suspended-accounts" \
-  --http-method=GET \
-  --headers="Authorization=Bearer $CRON_VALUE" \
-  --attempt-deadline=300s
-
-unset CRON_VALUE
-```
-
-Lịch trên là 03:00 mỗi ngày theo giờ Việt Nam. Chạy thử và xem lần thực thi:
-
-```bash
-gcloud scheduler jobs run cleanup-suspended-accounts --location="$GCP_REGION"
-gcloud scheduler jobs describe cleanup-suspended-accounts --location="$GCP_REGION"
-```
-
-## 8. Kiểm tra trước khi mở cho học sinh
+## 9. Kiểm tra và các lần deploy sau
 
 ```bash
 curl --fail --show-error "$APP_URL/api/health"
-gcloud run services logs read bqdmath-web --region="$GCP_REGION" --limit=100
+gcloud run services logs read bqdmath-web \
+  --region="$GCP_REGION" --limit=100
 ```
 
-Sau đó làm đầy đủ smoke test trong [production-deployment.md](./production-deployment.md):
-đăng nhập ADMIN/học sinh, duyệt lớp, lịch 2–3 buổi, thông báo, upload PDF R2,
-làm/nộp/chấm bài, email OTP và kiểm tra phân quyền chéo.
-
-## 9. Deploy các phiên bản sau
-
-Trước khi deploy:
-
-```bash
-npm run lint
-npm run build
-```
-
-Nếu commit có Prisma migration:
+Nếu có Prisma migration mới, chạy migration trước; sau đó deploy web:
 
 ```bash
 gcloud builds submit --config cloudbuild.migrate.yaml .
-```
-
-Mỗi lần phát hành web:
-
-```bash
 gcloud builds submit --config cloudbuild.yaml .
 ```
 
-Cloud Run giữ revision trước để rollback traffic nếu code mới có lỗi. Không
-rollback migration database bằng cách rollback image; migration production phải
-được thiết kế tương thích ngược và backup trước thay đổi lớn.
+Cloud SQL là chi phí nền lớn nhất. Bật Billing budget/alert. Có thể giảm xuống
+`db-f1-micro` khi chỉ thử nội bộ, nhưng production có người dùng thật nên giữ
+cấu hình custom bên trên và theo dõi CPU/RAM trước khi giảm.
 
-## 10. Domain riêng và kiểm soát chi phí
+## Lỗi thường gặp
 
-- Giai đoạn đầu có thể dùng URL `run.app` để tránh thêm chi phí cố định.
-- Với domain production, Google khuyến nghị Global External Application Load
-  Balancer. Cloud Run Domain Mapping tại Singapore vẫn ở Preview và Google ghi
-  rõ không khuyến nghị cho production.
-- Cấu hình Billing budget/alert ngay sau deploy. Budget chỉ cảnh báo, không tự
-  tắt dịch vụ.
-- `min-instances=0` là cấu hình tiết kiệm hiện tại. Trước buổi thi đông, có thể
-  đổi lên `1` để giảm cold start; điều này làm tăng chi phí nền.
-- Đặt giới hạn chi tiêu riêng ở Neon, Cloudflare, Gemini và Resend vì GCP Budget
-  không theo dõi các dịch vụ ngoài Google.
-
-## Xử lý lỗi thường gặp
-
-- **Cloud Build không đọc được secret:** kiểm tra `BUILD_SERVICE_ACCOUNT` bằng
-  `gcloud builds get-default-service-account` rồi cấp Secret Accessor đúng email.
-- **Cloud Build deploy bị `actAs denied`:** thiếu Service Account User trên
-  `bqdmath-runtime` cho build service account.
-- **Revision không ready / container không listen:** xem Cloud Run logs; image
-  đã được cấu hình `HOSTNAME=0.0.0.0` và `PORT=8080`, không sửa hai giá trị này.
-- **Trang chủ trả 500 nhưng `/api/health` vẫn 200:** container đang chạy nhưng
-  `DATABASE_URL` không kết nối được; kiểm tra Neon pooled URL/TLS và trạng thái DB.
-- **Đăng nhập redirect sai:** `AUTH_URL`/`NEXTAUTH_URL` chưa trùng URL đang mở,
-  hoặc Google OAuth callback chưa có `/api/auth/callback/google`.
-- **Upload PDF lỗi CORS:** R2 AllowedOrigins thiếu URL chính xác, hoặc bucket/API
-  token sai quyền.
-- **Prisma P1001:** `direct-url` sai, DB đang sleep/firewall chặn, hoặc thiếu
-  `sslmode=require`; migration không dùng pooled URL.
+- `Cloud SQL Admin API` hoặc `Cloud SQL Client` thiếu: migration/app không kết nối DB.
+- `iam.serviceAccounts.signBlob denied`: runtime thiếu Service Account Token Creator trên chính nó.
+- Upload bị CORS: origin trong bucket chưa đúng chính xác URL đang mở.
+- Cloud Build `actAs denied`: build account thiếu Service Account User trên runtime account.
+- Revision trả 500: xem Cloud Run logs và kiểm tra `db-password`, tên database/user.

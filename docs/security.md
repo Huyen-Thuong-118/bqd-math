@@ -25,9 +25,8 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
 
 ## 2. Vận chuyển & hạ tầng
 
-- [x] Kết nối DB luôn qua TLS (`sslmode=require` có sẵn trong connection
-      string Neon/Supabase mẫu ở `.env.example`).
-- [x] Deploy trên Vercel → HTTPS bắt buộc, tự động, miễn phí (Let's Encrypt).
+- [x] Cloud Run kết nối Cloud SQL bằng Unix socket qua Cloud SQL connector.
+- [x] Deploy trên Cloud Run với HTTPS bắt buộc.
 - [x] CSP, HSTS, chống MIME sniffing/clickjacking và Permissions Policy được
       cấu hình tập trung trong `next.config.ts`.
 - [x] File PDF/video không có link public vĩnh viễn — signed URL hết hạn
@@ -49,9 +48,8 @@ yêu cầu bảo mật/pháp lý cao hơn 1 web thông thường.
 ## 4. Secrets
 
 - [x] `.env` nằm trong `.gitignore` — không commit lên GitHub.
-- [ ] Khi deploy, nhập từng biến môi trường trực tiếp vào Vercel Project
-      Settings → Environment Variables (Vercel mã hoá lưu trữ), **không**
-      copy nguyên file `.env` dán vào đâu khác ngoài máy local.
+- [x] Secret production lưu trong Google Secret Manager và cấp quyền tối thiểu
+      cho đúng runtime service account.
 - [ ] Xoay vòng (rotate) `NEXTAUTH_SECRET` và API key nếu nghi ngờ rò rỉ.
 
 ## 5. Dữ liệu cá nhân & pháp lý Việt Nam
@@ -78,6 +76,5 @@ khi ra mắt công khai để đảm bảo tuân thủ đúng, đặc biệt cá
 ## 6. Khác
 
 - [ ] Chạy `npm audit` định kỳ, cập nhật dependency có lỗ hổng
-- [ ] Backup database định kỳ (Neon/Supabase có point-in-time recovery sẵn
-      ở gói trả phí — kiểm tra gói đang dùng có bật tính năng này chưa)
-- [ ] Log lỗi tập trung (Vercel có sẵn log, cân nhắc thêm Sentry khi lớn hơn)
+- [ ] Kiểm tra Cloud SQL automated backup và point-in-time recovery định kỳ.
+- [ ] Theo dõi log tập trung bằng Cloud Logging, cân nhắc thêm Sentry khi lớn hơn.

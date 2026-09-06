@@ -94,7 +94,7 @@ export function ExamEditForm({ exam, classes, directUpload }: { exam: EditableEx
 
   return (
     <form action={submit} className="space-y-6">
-      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Cloudflare R2. Không nên thay file đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
+      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên thay file đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       {exam.attemptCount > 0 && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Đề đã có {exam.attemptCount} lượt làm. Điểm và đáp án của các bài đã nộp được giữ nguyên theo bản chụp; thay đổi mới chỉ áp dụng cho lượt nộp sau.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">

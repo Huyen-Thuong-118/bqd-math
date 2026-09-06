@@ -7,7 +7,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.googleusercontent.com",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.cloudflarestream.com",
+  "connect-src 'self' https://storage.googleapis.com https://*.storage.googleapis.com https://*.cloudflarestream.com",
   "media-src 'self' blob: https://*.cloudflarestream.com",
   "worker-src 'self' blob:",
   "object-src 'none'",
@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
   deploymentId: process.env.DEPLOYMENT_VERSION,
   poweredByHeader: false,
   experimental: {
-    // PDF production được upload thẳng lên R2 bằng presigned URL. Server Action
+    // PDF production được upload thẳng lên Cloud Storage bằng signed URL. Server Action
     // chỉ nhận metadata, đáp án và storage key; giới hạn thấp giúp giảm rủi ro
     // request bất thường và giữ payload đi qua Cloud Run ở mức nhỏ.
     serverActions: { bodySizeLimit: "2mb" },

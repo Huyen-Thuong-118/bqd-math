@@ -79,18 +79,11 @@ vào `127.0.0.1`, không mở ra LAN/Internet.
 Lệnh này cũng khởi động OCR local ở `127.0.0.1:8001` (PyMuPDF + Tesseract
 `vie+eng`). Không cần API key; dữ liệu PDF không rời máy.
 
-#### Neon hoặc Supabase
+#### Production trên Google Cloud
 
-Cần điền các mục sau — xem chú thích chi tiết ngay trong `.env.example`:
-
-- **`DATABASE_URL` + `DIRECT_URL`** — dùng [Neon](https://neon.tech) hoặc
-  [Supabase](https://supabase.com) (miễn phí). **Bắt buộc dùng connection
-  string qua pooler cho `DATABASE_URL`** (Neon: hostname có `-pooler`;
-  Supabase: cổng `6543`) — nếu dùng nhầm direct connection, app sẽ bị lỗi
-  cạn kết nối khi nhiều người dùng cùng lúc. `DIRECT_URL` chỉ Prisma CLI
-  dùng khi migrate.
-- **`R2_*`** — tạo bucket ở Cloudflare Dashboard → R2, tạo API token
-- **`CLOUDFLARE_*`** — cần Cloudflare Workers Paid plan ($5/tháng) để dùng Stream
+Production dùng Cloud Run + Cloud SQL + Cloud Storage. Cloud Run truy cập bằng
+service account nên không cần JSON key. Xem
+[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).
 
 ### 3. Cài dependencies
 
@@ -114,8 +107,8 @@ báo connection string trong `schema.prisma` nữa. Giờ tách làm 2 nơi:
 
 | File | Dùng khi nào | Đọc biến nào |
 |------|-------------|--------------|
-| `prisma.config.ts` (gốc repo) | Prisma CLI chạy (`migrate`, `studio`) | `DIRECT_URL` — không qua pooler, vì migrate cần chạy DDL trực tiếp |
-| `src/lib/db.ts` | App chạy thật (mọi query trong code) | `DATABASE_URL` — qua pooler, qua driver adapter `@prisma/adapter-pg` |
+| `prisma.config.ts` (gốc repo) | Prisma CLI chạy (`migrate`, `studio`) | Local dùng `DIRECT_URL`; Cloud Build dùng Cloud SQL Auth Proxy |
+| `src/lib/db.ts` | App chạy thật (mọi query trong code) | Local dùng `DATABASE_URL`; Cloud Run dùng Unix socket Cloud SQL |
 
 Nếu quên điền 1 trong 2 biến ở `.env`, sẽ gặp lỗi rõ ràng ngay khi chạy
 lệnh tương ứng — điền đủ cả 2 trước khi chạy bước 3.
@@ -161,7 +154,7 @@ server sau khi đổi biến môi trường. Xem đầy đủ luồng và checkl
 ## Bước tiếp theo (chưa làm trong lần setup này)
 
 - [x] Connection pooling cho Prisma (`directUrl` trong schema + hướng dẫn `.env`)
-- [x] Client lưu trữ R2 (`lib/storage.ts`) + Cloudflare Stream (`lib/stream.ts`)
+- [x] Client lưu trữ Cloud Storage (`lib/storage.ts`) + Cloudflare Stream tùy chọn (`lib/stream.ts`)
 - [x] Cơ chế batch-save đáp án chống nghẽn DB (`features/exams/hooks/useAnswerBuffer.ts`)
 - [x] Mật khẩu hash 1 chiều, admin không xem lại được (`lib/password.ts`) — xem `docs/security.md`
 - [x] Session + ownership + deadline cho API route autosave đáp án
@@ -176,7 +169,7 @@ server sau khi đổi biến môi trường. Xem đầy đủ luồng và checkl
 ## Deploy production
 
 Không deploy bản dùng thật chỉ bằng cách import repo rồi bấm Deploy. Production
-cần database cloud có backup, R2 private, email domain thật, secret riêng, migration
+cần Cloud SQL có backup, Cloud Storage private, email domain thật, secret riêng, migration
 và smoke test hai vai trò. Làm theo runbook đầy đủ tại
 [`docs/production-deployment.md`](./docs/production-deployment.md).
 Các bước tạo GCP project, Secret Manager, migration, deploy và scheduler nằm tại
