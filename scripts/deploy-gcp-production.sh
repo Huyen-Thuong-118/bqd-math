@@ -248,11 +248,26 @@ gcloud builds submit \
   --config=cloudbuild.yaml \
   .
 
-APP_URL="$(gcloud run services describe "$SERVICE_NAME" \
+CLOUD_RUN_URL="$(gcloud run services describe "$SERVICE_NAME" \
   --project="$GCP_PROJECT_ID" \
   --region="$GCP_REGION" \
   --format='value(status.url)')"
-[[ "$APP_URL" == https://* ]] || fail "Không lấy được URL Cloud Run."
+[[ "$CLOUD_RUN_URL" == https://* ]] || fail "Không lấy được URL Cloud Run."
+
+EXISTING_AUTH_URL="$(gcloud run services describe "$SERVICE_NAME" \
+  --project="$GCP_PROJECT_ID" \
+  --region="$GCP_REGION" \
+  --format=json \
+  | jq -r '.spec.template.spec.containers[0].env[]? | select(.name == "AUTH_URL") | .value' \
+  | head -n 1)"
+
+if [[ -n "${PUBLIC_APP_URL:-}" ]]; then
+  APP_URL="$PUBLIC_APP_URL"
+elif [[ "$EXISTING_AUTH_URL" == https://*.web.app || "$EXISTING_AUTH_URL" == https://*.firebaseapp.com ]]; then
+  APP_URL="$EXISTING_AUTH_URL"
+else
+  APP_URL="$CLOUD_RUN_URL"
+fi
 
 gcloud run services update "$SERVICE_NAME" \
   --project="$GCP_PROJECT_ID" \
@@ -321,7 +336,7 @@ if gcloud scheduler jobs describe "$SCHEDULER_JOB" \
     --location="$GCP_REGION" \
     --schedule="0 3 * * *" \
     --time-zone="Asia/Ho_Chi_Minh" \
-    --uri="$APP_URL/api/cron/cleanup-suspended-accounts" \
+    --uri="$CLOUD_RUN_URL/api/cron/cleanup-suspended-accounts" \
     --http-method=GET \
     --update-headers="Authorization=Bearer $CRON_VALUE" >/dev/null
 else
@@ -330,7 +345,7 @@ else
     --location="$GCP_REGION" \
     --schedule="0 3 * * *" \
     --time-zone="Asia/Ho_Chi_Minh" \
-    --uri="$APP_URL/api/cron/cleanup-suspended-accounts" \
+    --uri="$CLOUD_RUN_URL/api/cron/cleanup-suspended-accounts" \
     --http-method=GET \
     --headers="Authorization=Bearer $CRON_VALUE" >/dev/null
 fi
@@ -339,6 +354,9 @@ unset CRON_VALUE
 section "Kiểm tra website"
 curl --fail --show-error --silent "$APP_URL/api/health"
 printf '\n\nDeploy production thành công: %s\n' "$APP_URL"
+if [[ "$APP_URL" != "$CLOUD_RUN_URL" ]]; then
+  printf 'Cloud Run gốc: %s\n' "$CLOUD_RUN_URL"
+fi
 printf 'Đăng nhập bằng email và mật khẩu ADMIN vừa nhập.\n'
 if [[ "$CONFIGURE_GOOGLE" == "yes" ]]; then
   printf 'Google Login đã được cấu hình trên Cloud Run.\n'
