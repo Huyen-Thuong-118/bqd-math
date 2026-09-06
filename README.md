@@ -25,6 +25,8 @@ Luồng làm bài end-to-end nằm tại
 Upload PDF và phiếu tô nằm tại
 [`docs/implementation-slice-2.md`](./docs/implementation-slice-2.md).
 Xem checklist bảo mật trong [`docs/security.md`](./docs/security.md) trước khi public.
+Deploy production lên Google Cloud Run theo
+[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).
 
 ```
 src/
@@ -169,7 +171,7 @@ server sau khi đổi biến môi trường. Xem đầy đủ luồng và checkl
 - [x] UI làm 10 câu + `ExamTimer` + autosave/reload + nộp/chấm/kết quả
 - [ ] Viết logic thật trong các `features/*/actions.ts` và `queries.ts` còn lại
 - [ ] Load test 500 concurrent bằng k6 trước khi dùng thi thật
-- [ ] Deploy lên [Vercel](https://vercel.com) — connect thẳng repo GitHub này
+- [x] Chuẩn bị Docker/Cloud Build để deploy lên Google Cloud Run
 
 ## Deploy production
 
@@ -177,3 +179,5 @@ Không deploy bản dùng thật chỉ bằng cách import repo rồi bấm Depl
 cần database cloud có backup, R2 private, email domain thật, secret riêng, migration
 và smoke test hai vai trò. Làm theo runbook đầy đủ tại
 [`docs/production-deployment.md`](./docs/production-deployment.md).
+Các bước tạo GCP project, Secret Manager, migration, deploy và scheduler nằm tại
+[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).

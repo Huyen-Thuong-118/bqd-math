@@ -4,6 +4,7 @@ const required = [
   "DATABASE_URL",
   "DIRECT_URL",
   "AUTH_SECRET",
+  "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
@@ -33,6 +34,18 @@ if (!appUrl) {
   }
 }
 
+if (process.env.AUTH_TRUST_HOST !== "true") {
+  errors.push("AUTH_TRUST_HOST phải là true khi chạy sau Cloud Run proxy");
+}
+
+const serverActionsKey = process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY?.trim();
+if (serverActionsKey) {
+  const decodedLength = Buffer.from(serverActionsKey, "base64").length;
+  if (![16, 24, 32].includes(decodedLength)) {
+    errors.push("NEXT_SERVER_ACTIONS_ENCRYPTION_KEY phải là khóa AES base64 16, 24 hoặc 32 byte");
+  }
+}
+
 for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
   const value = process.env[key]?.trim();
   if (value && /@(127\.0\.0\.1|localhost)(:|\/)/i.test(value)) {
@@ -57,4 +70,3 @@ if (errors.length) {
 } else {
   console.log("✓ Các biến môi trường production bắt buộc đã được cấu hình hợp lệ.");
 }
-

@@ -6,7 +6,9 @@ chung.
 
 ## 1. Kiến trúc bắt buộc
 
-- Vercel Pro: chạy ứng dụng Next.js, HTTPS, cron và firewall.
+- Google Cloud Run: chạy ứng dụng Next.js container tại Singapore.
+- Artifact Registry + Cloud Build: lưu image và rollout revision có thể rollback.
+- Secret Manager + Cloud Scheduler: giữ secret và chạy cleanup hằng ngày.
 - Neon PostgreSQL gói có backup/PITR phù hợp: lưu tài khoản, lớp, lịch, đề và kết quả.
 - Cloudflare R2 private bucket: lưu PDF. Trình duyệt upload trực tiếp bằng URL ký ngắn hạn.
 - Gemini API: đọc cấu trúc PDF và đáp án. OCR local không tồn tại trên Vercel.
@@ -60,7 +62,7 @@ triển khai schema theo hướng tương thích ngược; rollback code không 
 Không cấp quyền quản trị tài khoản Cloudflare cho ứng dụng. Chỉ dùng token giới
 hạn bucket và xoay token ngay nếu nghi ngờ lộ.
 
-## 4. Biến môi trường Vercel Production
+## 4. Biến môi trường production
 
 Đánh dấu Sensitive cho mọi password, connection string, API key và secret.
 
@@ -69,6 +71,8 @@ hạn bucket và xoay token ngay nếu nghi ngờ lộ.
 - `DATABASE_URL`, `DIRECT_URL`
 - `AUTH_URL` và `NEXTAUTH_URL`: cùng trỏ tới domain HTTPS chính thức
 - `AUTH_SECRET`: chuỗi ngẫu nhiên tối thiểu 32 byte
+- `AUTH_TRUST_HOST=true`: bắt buộc khi Auth.js chạy sau Cloud Run proxy
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`: khóa AES base64 dùng chung lúc build/runtime
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
 - `GEMINI_API_KEY`, `GEMINI_MODEL`
 - `RESEND_API_KEY`, `EMAIL_FROM`
@@ -100,14 +104,10 @@ thái PENDING; ADMIN duyệt rồi thêm vào lớp. Không chạy `seed:test-da
 
 ## 6. Tạo project và deploy
 
-1. Import GitHub repository vào Vercel team Pro.
-2. Framework Preset: Next.js; Root Directory là repository root.
-3. Khai báo riêng Environment Variables cho Production và Preview.
-4. Gắn domain, xác minh DNS, rồi cập nhật `AUTH_URL`, `NEXTAUTH_URL`, Resend và R2 CORS.
-5. Chạy `npm run check:production-env`, migration và seed ADMIN như trên.
-6. Deploy commit đã qua `npm run lint && npm run build`.
-7. Bật Spend Management, cảnh báo usage và firewall/rate limit cho đăng nhập,
-   đăng ký và quên mật khẩu.
+Làm theo runbook riêng tại
+[`gcp-cloud-run-deployment.md`](./gcp-cloud-run-deployment.md). Runbook đã gồm
+tạo GCP project, IAM tối thiểu, Secret Manager, migration, Cloud Build, Cloud
+Run, Scheduler và kiểm soát chi phí.
 
 ## 7. Smoke test bắt buộc trước khi mời học sinh
 
@@ -118,8 +118,7 @@ thái PENDING; ADMIN duyệt rồi thêm vào lớp. Không chạy `seed:test-da
 - Upload tài liệu và cặp PDF đề/đáp án gần 20 MB; xem được sau một lần redeploy.
 - Tạo đề, quét Gemini, làm bài, autosave, nộp bài, chấm điểm và tải CSV.
 - Tài khoản học sinh A không truy cập được lớp, file, attempt hoặc kết quả của B.
-- Cron cleanup trả 401 khi thiếu secret và chạy thành công từ Vercel Cron.
+- Cron cleanup trả 401 khi thiếu secret và chạy thành công từ Cloud Scheduler.
 
 Chỉ mở public sau khi có Privacy Policy, điều khoản sử dụng, quy trình yêu cầu
 xóa dữ liệu và cơ chế đồng ý phù hợp cho dữ liệu học sinh/trẻ vị thành niên.
-

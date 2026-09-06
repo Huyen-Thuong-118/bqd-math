@@ -18,11 +18,17 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+  // Cloud Run chỉ cần server tối thiểu + các dependency đã được Next trace.
+  // Dockerfile copy `.next/standalone`, `public` và `.next/static` sang image.
+  output: "standalone",
+  // Mỗi Cloud Build dùng BUILD_ID riêng để Next phát hiện version skew khi
+  // Cloud Run đang chuyển traffic giữa hai revision.
+  deploymentId: process.env.DEPLOYMENT_VERSION,
   poweredByHeader: false,
   experimental: {
     // PDF production được upload thẳng lên R2 bằng presigned URL. Server Action
     // chỉ nhận metadata, đáp án và storage key; giới hạn thấp giúp giảm rủi ro
-    // request bất thường và luôn nằm dưới payload limit của Vercel Functions.
+    // request bất thường và giữ payload đi qua Cloud Run ở mức nhỏ.
     serverActions: { bodySizeLimit: "2mb" },
   },
   async headers() {

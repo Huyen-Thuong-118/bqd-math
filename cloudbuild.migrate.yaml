@@ -1,0 +1,21 @@
+steps:
+  - id: migrate-production-database
+    name: node:22-bookworm-slim
+    entrypoint: bash
+    secretEnv:
+      - DIRECT_URL
+    args:
+      - -ceu
+      - |
+        npm ci
+        npm run db:migrate:deploy
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/direct-url/versions/latest
+      env: DIRECT_URL
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 900s
