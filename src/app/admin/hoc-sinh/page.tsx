@@ -35,6 +35,7 @@ export default async function AdminStudentsPage() {
       id: true,
       name: true,
       email: true,
+      studentCode: true,
       studentPhone: true,
       parentPhone: true,
       status: true,

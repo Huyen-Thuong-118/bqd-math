@@ -13,6 +13,12 @@ khẩu HS, chỉ có chức năng Reset).
 - `actions/register.ts` — server action đăng ký, validate lại y hệt client
 - `components/` — LoginForm, RegisterForm, ForgotPasswordFlow, GoogleAuthButton,
   MathDoodles (UI, dùng ở `app/(auth)/`)
+- `actions/change-password.ts` + `ChangePasswordForm` — người dùng ACTIVE đổi
+  mật khẩu khi đang đăng nhập, bắt buộc xác minh mật khẩu cũ và đăng xuất sau
+  thành công. Google-only được hướng qua OTP thay vì đặt mật khẩu từ session.
+
+JWT đã phát hành trên thiết bị khác chưa bị revoke khi đổi mật khẩu; nếu cần
+thu hồi mọi phiên, bổ sung `sessionVersion` vào User/JWT ở một task bảo mật riêng.
 
 ## Sẽ chứa
 

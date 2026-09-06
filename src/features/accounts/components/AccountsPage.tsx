@@ -61,6 +61,7 @@ export function AccountsPage({
       if (!term) return true;
       return (
         account.name.toLowerCase().includes(term) ||
+        Boolean(account.studentCode?.toLowerCase().includes(term)) ||
         Boolean(account.studentPhone?.includes(term)) ||
         Boolean(account.parentPhone?.includes(term)) ||
         account.email.toLowerCase().includes(term)
@@ -179,7 +180,7 @@ export function AccountsPage({
           type="text"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Tìm theo tên, số điện thoại hoặc email..."
+          placeholder="Tìm theo mã, tên, số điện thoại hoặc email..."
           className="w-full rounded-full border border-navy-100 bg-white py-2.5 pr-4 pl-10 text-sm text-navy-500 placeholder:text-navy-300 outline-none transition-colors focus:border-navy-400"
         />
       </div>

@@ -48,15 +48,34 @@ function scoringValues(value: unknown) {
   };
 }
 
+function folderOptions(rows: { id: string; name: string; parentId: string | null }[]) {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    const names = [row.name];
+    let parentId = row.parentId;
+    const seen = new Set<string>();
+    while (parentId && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = byId.get(parentId);
+      if (!parent) break;
+      names.unshift(parent.name);
+      parentId = parent.parentId;
+    }
+    return { id: row.id, label: names.join(" / ") };
+  }).sort((a, b) => a.label.localeCompare(b.label, "vi"));
+}
+
 export default async function EditExamPage({ params }: { params: Promise<{ examId: string }> }) {
   await requireActiveAdminId();
   const { examId } = await params;
-  const [exam, classes] = await Promise.all([
+  const [exam, classes, folderRows] = await Promise.all([
     db.exam.findUnique({
       where: { id: examId },
       select: {
         id: true,
         title: true,
+        source: true,
+        folderId: true,
         mode: true,
         status: true,
         durationMinutes: true,
@@ -71,11 +90,12 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
         answerFileUrl: true,
         scoringPolicy: true,
         examLinks: { select: { classId: true } },
-        questions: { select: { number: true, type: true, correctAnswer: true }, orderBy: { number: "asc" } },
+        questions: { select: { number: true, type: true, content: true, options: true, correctAnswer: true, explanation: true, points: true }, orderBy: { number: "asc" } },
         _count: { select: { attempts: true } },
       },
     }),
-    db.class.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true, level: true }, orderBy: { name: "asc" } }),
+    db.class.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true, code: true, level: true }, orderBy: { name: "asc" } }),
+    db.folder.findMany({ where: { kind: "EXAM" }, select: { id: true, name: true, parentId: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] }),
   ]);
   if (!exam) notFound();
   const scoring = scoringValues(exam.scoringPolicy);
@@ -84,10 +104,13 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
       <div><h1 className="text-xl font-semibold text-navy-600">Chỉnh sửa đề thi</h1><p className="mt-1 text-sm text-navy-300">Cập nhật cấu hình, lớp được giao, file PDF, đáp án và thang điểm.</p></div>
       <ExamEditForm
         classes={classes}
+        folders={folderOptions(folderRows)}
         directUpload={isCloudStorageConfigured()}
         exam={{
           id: exam.id,
           title: exam.title,
+          source: exam.source,
+          folderId: exam.folderId,
           mode: exam.mode,
           status: exam.status,
           durationMinutes: exam.durationMinutes,
@@ -104,6 +127,7 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
           attemptCount: exam._count.attempts,
           questions: exam.questions.map((question) => ({
             ...question,
+            options: Array.isArray(question.options) ? question.options.filter((item): item is string => typeof item === "string") : [],
             correctAnswer: question.type === "TRUE_FALSE" && question.correctAnswer.split(",").length !== 4 ? ",,," : question.correctAnswer,
           })),
           ...scoring,

@@ -1,9 +1,11 @@
 "use server";
 
+import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { db } from "@/lib/db";
 import { requireActiveAdminId } from "@/features/exams/admin";
+import { isValidClassCode, normalizeClassCode } from "@/lib/management-codes";
 import { formatClassSchedule, type ClassScheduleSlotInput } from "./schedule";
 
 export type ClassActionResult = { success: true } | { success: false; error: string };
@@ -24,9 +26,11 @@ function refreshClasses(classId?: string) {
 
 function validateClassInput(formData: FormData) {
   const name = value(formData, "name");
+  const code = normalizeClassCode(value(formData, "code"));
   const description = value(formData, "description");
   const level = value(formData, "level") === "ADVANCED" ? "ADVANCED" : "BASIC";
   if (name.length < 2 || name.length > 100) return { error: "Tên lớp phải có từ 2 đến 100 ký tự." } as const;
+  if (!isValidClassCode(code)) return { error: "Mã lớp gồm 2–30 ký tự A–Z, 0–9, dấu gạch ngang hoặc gạch dưới." } as const;
   if (description.length > 1000) return { error: "Mô tả tối đa 1.000 ký tự." } as const;
   let slots: ClassScheduleSlotInput[];
   try {
@@ -48,7 +52,7 @@ function validateClassInput(formData: FormData) {
     return { error: "Hãy thêm từ 1 đến 14 buổi học và kiểm tra lại giờ bắt đầu/kết thúc." } as const;
   }
   return {
-    data: { name, level, schedule: formatClassSchedule(slots), description: description || null },
+    data: { name, code, level, schedule: formatClassSchedule(slots), description: description || null },
     slots,
   } as const;
 }
@@ -68,6 +72,7 @@ export async function createClass(formData: FormData): Promise<ClassActionResult
     return { success: true };
   } catch (error) {
     console.error("createClass thất bại:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, error: "Mã lớp đã được sử dụng." };
     return { success: false, error: "Không thể tạo lớp." };
   }
 }
@@ -93,6 +98,7 @@ export async function updateClass(classId: string, formData: FormData): Promise<
     return { success: true };
   } catch (error) {
     console.error("updateClass thất bại:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, error: "Mã lớp đã được sử dụng." };
     return { success: false, error: "Không thể cập nhật lớp." };
   }
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { MathDoodles } from "@/features/auth/components/MathDoodles";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 // Route group (auth): Đăng nhập/Đăng ký/Quên mật khẩu — layout split-screen
 // riêng, KHÔNG dùng Navbar/Footer của (public).
@@ -22,7 +23,8 @@ export default async function AuthLayout({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col md:flex-row">
+    <div className="relative flex min-h-dvh flex-col md:flex-row">
+      <ThemeToggle className="absolute right-4 top-4 z-20 w-32" />
       {/* Panel trái — ẩn hoàn toàn dưới md, chỉ còn panel phải full width */}
       <div className="relative hidden w-full flex-col justify-between overflow-hidden bg-linear-to-b from-galaxy-900 to-galaxy-800 px-10 py-10 text-pastel-50 md:flex md:w-[42%] lg:w-[38%]">
         <MathDoodles />

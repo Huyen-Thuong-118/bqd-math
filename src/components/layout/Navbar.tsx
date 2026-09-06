@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { LogIn, LogOut, Menu, ShieldCheck, UserPlus, X } from "lucide-react";
+import { KeyRound, LogIn, LogOut, Menu, Search, ShieldCheck, UserPlus, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NAV_LINKS } from "./navLinks";
 
 /**
@@ -90,6 +91,7 @@ export function Navbar() {
             khối riêng. Đăng ký là nút chính (nền navy đặc), Đăng nhập là phụ.
             Hamburger thay cả cụm này ở mobile. */}
         <div className="flex items-center justify-end gap-2 xl:border-l xl:border-navy-100/80 xl:pl-3">
+          <ThemeToggle className="hidden w-32 xl:flex" />
           {isAuthenticated ? (
             <div className="hidden xl:block">
               <AccountMenu user={session.user} />
@@ -138,6 +140,7 @@ export function Navbar() {
         className="border-t border-navy-100/70 bg-nav xl:hidden"
       >
         <ul className="flex w-full flex-col gap-1 px-4 py-4 text-lg">
+          <li><ThemeToggle className="w-full" /></li>
           {NAV_LINKS.map((link) => {
             const isActive = pathname === link.href;
             return (
@@ -168,6 +171,22 @@ export function Navbar() {
                     {session.user.name ?? session.user.email}
                   </span>
                 </div>
+                <Link
+                  href={session.user.role === "ADMIN" ? "/admin/tim-kiem" : "/tim-kiem"}
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-navy-200/60 bg-white px-4 py-3 font-medium text-navy-500 transition-colors hover:bg-pastel-50"
+                >
+                  <Search className="size-5" aria-hidden />
+                  Tìm kiếm
+                </Link>
+                <Link
+                  href="/tai-khoan/doi-mat-khau"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-navy-200/60 bg-white px-4 py-3 font-medium text-navy-500 transition-colors hover:bg-pastel-50"
+                >
+                  <KeyRound className="size-5" aria-hidden />
+                  Đổi mật khẩu
+                </Link>
                 {session.user.role === "ADMIN" && (
                   <Link
                     href="/admin"
@@ -248,12 +267,14 @@ function Avatar({ user }: { user: NavbarSessionUser }) {
 }
 
 /**
- * Danh sách CỐ ĐỊNH — luôn 2 phần tử, KHÔNG được filter trước khi map (dễ vô
+ * Danh sách CỐ ĐỊNH, KHÔNG được filter trước khi map (dễ vô
  * tình làm rỗng cả mảng nếu điều kiện lọc sai). Ẩn/hiện từng dòng xử lý riêng
  * bên trong .map(), "adminOnly" chỉ tắt đúng 1 dòng "Trang quản trị".
  */
 const ACCOUNT_MENU_ITEMS = [
   { key: "admin", label: "Trang quản trị", icon: ShieldCheck, href: "/admin", adminOnly: true },
+  { key: "search", label: "Tìm kiếm", icon: Search, href: "/tim-kiem", adminOnly: false },
+  { key: "password", label: "Đổi mật khẩu", icon: KeyRound, href: "/tai-khoan/doi-mat-khau", adminOnly: false },
   { key: "logout", label: "Đăng xuất", icon: LogOut, href: null, adminOnly: false },
 ] as const;
 
@@ -306,12 +327,13 @@ function AccountMenu({ user }: { user: NavbarSessionUser }) {
           {ACCOUNT_MENU_ITEMS.map((item) => {
             if (item.adminOnly && user.role !== "ADMIN") return null;
             const Icon = item.icon;
+            const itemHref = item.key === "search" && user.role === "ADMIN" ? "/admin/tim-kiem" : item.href;
 
-            if (item.href) {
+            if (itemHref) {
               return (
                 <Link
                   key={item.key}
-                  href={item.href}
+                    href={itemHref}
                   role="menuitem"
                   onClick={() => setIsOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-navy-600 transition-colors hover:bg-pastel-50"

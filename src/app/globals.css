@@ -6,6 +6,16 @@
    Dùng: bg-navy-500, text-pastel-100, border-navy-300 ...
    ============================================ */
 :root {
+  --app-background: #e8f4fd;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f5fafe;
+  --app-text: #162240;
+  --app-text-muted: #5972b4;
+  --app-border: #c5d0e6;
+  --app-primary: #1b2a4a;
+  --app-danger: #dc2626;
+  --app-success: #15803d;
+  --app-overlay: rgb(7 10 25 / 45%);
   /* Navy — dùng cho chữ, border đậm, trạng thái active */
   --color-navy-50: #e8edf5;
   --color-navy-100: #c5d0e6;
@@ -116,6 +126,110 @@
 
 body {
   font-family: var(--font-sans);
+  overflow-x: hidden;
+  padding-right: env(safe-area-inset-right);
+  padding-left: env(safe-area-inset-left);
+}
+
+/* Dark mode giữ nguyên màu navy dùng cho button/gradient, nhưng ánh xạ các
+   utility đang đóng vai trò text/surface sang semantic token tối. Cách này
+   giúp màn cũ chuyển theme đồng bộ mà không biến nút navy thành nền sáng. */
+.dark {
+  color-scheme: dark;
+  --app-background: #09111f;
+  --app-surface: #121d30;
+  --app-surface-muted: #18253a;
+  --app-text: #edf3ff;
+  --app-text-muted: #aab9d2;
+  --app-border: #2a3a54;
+  --app-primary: #8fc9f3;
+  --app-danger: #fca5a5;
+  --app-success: #86efac;
+  --app-overlay: rgb(0 0 0 / 65%);
+  --color-nav: #0f1a2c;
+}
+
+.dark body {
+  background: var(--app-background);
+  color: var(--app-text);
+}
+
+.dark .bg-white,
+.dark [class~="bg-white/95"],
+.dark [class~="bg-white/70"],
+.dark [class~="bg-white/60"] {
+  background-color: var(--app-surface) !important;
+}
+
+.dark .bg-pastel-50,
+.dark .bg-pastel-100,
+.dark .bg-pastel-200,
+.dark .bg-nav,
+.dark .bg-slate-50,
+.dark .bg-slate-100 {
+  background-color: var(--app-surface-muted) !important;
+}
+
+.dark .text-navy-900,
+.dark .text-navy-800,
+.dark .text-navy-700,
+.dark .text-navy-600,
+.dark .text-navy-500 {
+  color: var(--app-text) !important;
+}
+
+.dark .text-navy-400,
+.dark .text-navy-300,
+.dark .text-navy-200,
+.dark .text-slate-600,
+.dark .text-slate-400 {
+  color: var(--app-text-muted) !important;
+}
+
+.dark .border-navy-50,
+.dark .border-navy-100,
+.dark .border-navy-200,
+.dark .border-slate-200 {
+  border-color: var(--app-border) !important;
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: var(--app-surface);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.dark .bg-red-50 { background-color: #3a1820 !important; }
+.dark .bg-green-50 { background-color: #12301f !important; }
+.dark .bg-amber-50,
+.dark .bg-amber-100,
+.dark .bg-amber-200 { background-color: #382b12 !important; }
+.dark .text-red-400,
+.dark .text-red-500,
+.dark .text-red-600,
+.dark .text-red-700 { color: var(--app-danger) !important; }
+.dark .text-green-600,
+.dark .text-green-700,
+.dark .text-green-800 { color: var(--app-success) !important; }
+.dark .text-amber-700,
+.dark .text-amber-800 { color: #fde68a !important; }
+.dark .hover\:bg-white:hover,
+.dark .hover\:bg-pastel-50:hover,
+.dark .hover\:bg-pastel-100:hover { background-color: #22314a !important; }
+
+.dark * {
+  scrollbar-color: #52637e var(--app-background);
+}
+
+@media print {
+  .dark,
+  .dark body {
+    color-scheme: light;
+    background: white !important;
+    color: black !important;
+  }
 }
 
 /* Cho nút CTA "Xem lịch học" cuộn mượt xuống section lịch (href="#lich-giang-day") */

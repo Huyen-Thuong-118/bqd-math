@@ -36,6 +36,7 @@ async function main() {
         status: "ACTIVE",
         passwordHash,
         mustChangePassword: false,
+        studentCode: `HS-TEST${padded.padStart(4, "0")}`,
         studentPhone: `09350000${padded}`,
         parentPhone: `09450000${padded}`,
       },
@@ -45,6 +46,7 @@ async function main() {
         email: `hocsinh${padded}@bqdmath.local`,
         role: "STUDENT",
         status: "ACTIVE",
+        studentCode: `HS-TEST${padded.padStart(4, "0")}`,
         passwordHash,
         studentPhone: `09350000${padded}`,
         parentPhone: `09450000${padded}`,
@@ -63,6 +65,7 @@ async function main() {
       create: {
         id: classId,
         name: seed.name,
+        code: `TEST-${String(classIndex + 1).padStart(2, "0")}`,
         level,
         schedule: formatClassSchedule(seed.slots),
         description: `Lớp kiểm thử số ${classIndex + 1}, có ${seed.slots.length} buổi học mỗi tuần.`,

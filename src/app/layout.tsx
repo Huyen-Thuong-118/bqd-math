@@ -1,6 +1,7 @@
 ﻿import type { Metadata } from "next";
 import { Comfortaa, Noto_Serif_Display } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import "./globals.css";
 
 const comfortaa = Comfortaa({
@@ -29,10 +30,12 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
       className={`${comfortaa.variable} ${notoSerifDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-pastel-100 text-navy-500 font-sans">
-        <SessionProvider>{children}</SessionProvider>
+        <ThemeProvider><SessionProvider>{children}</SessionProvider></ThemeProvider>
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import type { StudentAccount } from "../types";
@@ -73,10 +74,11 @@ export function AccountsTable({
       {/* Bảng ngang — chỉ hiện từ md trở lên, dưới md chuyển sang card ở khối
           bên dưới thay vì để table tràn ngang màn hình. */}
       <div className="hidden overflow-x-auto rounded-2xl border border-navy-100 bg-white md:block">
-        <table className="w-full min-w-[860px] text-left text-sm">
+        <table className="w-full min-w-[980px] text-left text-sm">
           <thead>
             <tr className="border-b border-navy-100 text-xs font-semibold tracking-wide text-navy-300 uppercase">
               <th className="px-4 py-3">Họ tên</th>
+              <th className="px-4 py-3">Mã học sinh</th>
               <th className="px-4 py-3">SĐT học sinh</th>
               <th className="px-4 py-3">SĐT phụ huynh</th>
               <th className="px-4 py-3">Email</th>
@@ -89,6 +91,7 @@ export function AccountsTable({
             {accounts.map((account) => (
               <tr key={account.id} className="border-b border-navy-100/60 last:border-0">
                 <td className="px-4 py-3.5 font-medium text-navy-500">{account.name}</td>
+                <td className="px-4 py-3.5 font-semibold text-navy-500">{account.studentCode ?? "—"}</td>
                 <td className="px-4 py-3.5 text-navy-400">{formatPhone(account.studentPhone)}</td>
                 <td className="px-4 py-3.5 text-navy-400">{formatPhone(account.parentPhone)}</td>
                 <td className="px-4 py-3.5 text-navy-400">{account.email}</td>
@@ -102,11 +105,7 @@ export function AccountsTable({
                   )}
                 </td>
                 <td className="px-4 py-3.5">
-                  <AccountActions
-                    account={account}
-                    isPending={pendingId === account.id}
-                    {...actionProps}
-                  />
+                  <div className="flex flex-wrap gap-2"><Link href={`/admin/hoc-sinh/${account.id}/ket-qua`} className={`${actionButtonClass} border border-navy-200 text-navy-500`}>Xem kết quả</Link><AccountActions account={account} isPending={pendingId === account.id} {...actionProps} /></div>
                 </td>
               </tr>
             ))}
@@ -121,7 +120,7 @@ export function AccountsTable({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-navy-500">{account.name}</p>
-                <p className="text-xs text-navy-300">{account.email}</p>
+                <p className="text-xs text-navy-300">{account.studentCode ?? "Chưa có mã"} · {account.email}</p>
               </div>
               <StatusBadge status={account.status} />
             </div>
@@ -142,6 +141,7 @@ export function AccountsTable({
             )}
 
             <div className="mt-3 flex flex-wrap gap-2 border-t border-navy-100 pt-3">
+              <Link href={`/admin/hoc-sinh/${account.id}/ket-qua`} className={`${actionButtonClass} border border-navy-200 text-navy-500`}>Xem kết quả</Link>
               <AccountActions
                 account={account}
                 isPending={pendingId === account.id}

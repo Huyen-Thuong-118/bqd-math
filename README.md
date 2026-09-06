@@ -18,6 +18,8 @@ tập theo chương, phòng thi thử có chấm điểm.
 Xem chi tiết logic tổ chức trong [`docs/architecture.md`](./docs/architecture.md).
 Xem phạm vi sản phẩm và roadmap trong
 [`docs/product-blueprint.md`](./docs/product-blueprint.md).
+Backlog implementation có thể giao theo từng task cho agent nằm tại
+[`docs/implementation-agent-backlog.md`](./docs/implementation-agent-backlog.md).
 Xem phần đã triển khai cho lát cắt 0 trong
 [`docs/implementation-slice-0.md`](./docs/implementation-slice-0.md).
 Luồng làm bài end-to-end nằm tại
@@ -45,6 +47,50 @@ Mỗi thư mục trong `features/` có 1 file `README.md` ngắn giải thích p
 mở thư mục nào là biết ngay thư mục đó làm gì.
 
 ## Bắt đầu chạy project
+
+### Chạy nhanh local
+
+Sau khi mở Docker Desktop, chạy một lệnh để tự tạo `.env` (nếu chưa có),
+cài dependencies, khởi động PostgreSQL + OCR, áp dụng migration và chạy app:
+
+```bash
+npm run local
+```
+
+Mở [http://localhost:3000](http://localhost:3000). Nhấn `Ctrl+C` để dừng
+dev server; PostgreSQL và OCR tiếp tục chạy để lần khởi động sau nhanh hơn.
+
+Lệnh này luôn dùng PostgreSQL Docker và `storage/uploads/` trên máy hiện tại,
+kể cả khi `.env` có cấu hình GCP. Vì vậy thao tác thử nghiệm local không sửa
+Cloud SQL hoặc file trên Cloud Storage production.
+
+### Dùng Vertex AI khi chạy local (tùy chọn)
+
+Vertex AI chạy được ở local bằng Application Default Credentials (ADC), không
+cần tạo hoặc tải service-account JSON key. Sau khi cài Google Cloud CLI, chạy:
+
+```bash
+npm run setup:local:vertex
+npm run local
+```
+
+Tài khoản Google đang đăng nhập phải có role `Vertex AI User`
+(`roles/aiplatform.user`) trên project `bqd-math-507809`, và project phải được
+liên kết với một tài khoản Cloud Billing đang hoạt động. Nếu chưa cấu hình ADC,
+chưa bật billing hoặc Vertex AI tạm lỗi, tính năng quét đề sẽ fallback sang OCR
+local.
+
+### Dữ liệu sau khi deploy GCP
+
+Cloud Run chỉ chạy container ứng dụng. Dữ liệu nghiệp vụ nằm trong Cloud SQL,
+còn PDF/tài liệu nằm trong Cloud Storage, nên các lần deploy sau vẫn giữ nguyên
+dữ liệu. Pipeline production chỉ chạy migration rồi thay revision Cloud Run;
+không reset database và không xóa bucket.
+
+Local và production cố ý dùng hai bộ dữ liệu riêng. Không nên trỏ máy local
+vào database/bucket production vì seed, migration thử nghiệm hoặc thao tác trên
+UI local có thể thay đổi dữ liệu thật. Khi cần môi trường online dùng chung để
+kiểm thử, hãy tạo Cloud SQL database và bucket staging riêng.
 
 ### 1. Tạo file môi trường
 
@@ -149,6 +195,8 @@ server sau khi đổi biến môi trường. Xem đầy đủ luồng và checkl
 | `npm run verify:slice-0` | Kiểm tra tự động auth/trạng thái trên DB local (cần dev server) |
 | `npm run verify:slice-1` | Kiểm tra ownership, autosave, chấm điểm và kết quả (cần seed + dev server) |
 | `npm run verify:slice-2` | Kiểm tra quyền PDF, download và lời giải (cần dev server) |
+| `npm run verify:change-password` | Kiểm tra đổi mật khẩu cũ/mới và chặn tài khoản bị khóa |
+| `npm run verify:backlog` | Kiểm tra filter, mã quản lý, metric tiến độ và invariant dữ liệu mới |
 | `npm run seed:samples` | Import cặp PDF số 1 trong `data/` thành đề mẫu 12–4–6 |
 
 ## Bước tiếp theo (chưa làm trong lần setup này)

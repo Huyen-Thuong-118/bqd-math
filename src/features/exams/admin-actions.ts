@@ -23,6 +23,14 @@ const ADMIN_EXAMS_PATH = "/admin/de-thi";
 
 type QuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
 type ExamSection = { label: string; count: number; type: QuestionType };
+type ManualQuestion = {
+  type: QuestionType;
+  content: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string | null;
+  points: number;
+};
 type CreateExamResult =
   | { success: true; examId: string }
   | { success: false; error: string };
@@ -86,6 +94,35 @@ function parseSections(raw: string): ExamSection[] | null {
       count: Number(section.count),
       type: section.type as QuestionType,
     }));
+  } catch {
+    return null;
+  }
+}
+
+function parseManualQuestions(raw: string): ManualQuestion[] | null {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!Array.isArray(value) || value.length === 0 || value.length > 200) return null;
+    const questions: ManualQuestion[] = [];
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const row = item as Record<string, unknown>;
+      if (!["MULTIPLE_CHOICE", "TRUE_FALSE", "SHORT_ANSWER"].includes(String(row.type))) return null;
+      const type = row.type as QuestionType;
+      const content = typeof row.content === "string" ? row.content.trim() : "";
+      const explanation = typeof row.explanation === "string" && row.explanation.trim() ? row.explanation.trim() : null;
+      const points = Number(row.points);
+      const options = Array.isArray(row.options)
+        ? row.options.map((option) => typeof option === "string" ? option.trim() : "")
+        : [];
+      const correctAnswer = typeof row.correctAnswer === "string" ? row.correctAnswer.trim().toUpperCase().replace(/Đ/g, "D") : "";
+      if (!content || content.length > 4_000 || (explanation?.length ?? 0) > 10_000 || !Number.isFinite(points) || points <= 0 || points > 100) return null;
+      if (type === "MULTIPLE_CHOICE" && (options.length !== 4 || options.some((option) => !option || option.length > 1_000) || !/^[ABCD]$/.test(correctAnswer))) return null;
+      if (type === "TRUE_FALSE" && (options.length !== 4 || options.some((option) => !option || option.length > 1_000) || !/^[DS](,[DS]){3}$/.test(correctAnswer))) return null;
+      if (type === "SHORT_ANSWER" && (!correctAnswer || correctAnswer.length > 50)) return null;
+      questions.push({ type, content, options: type === "SHORT_ANSWER" ? [] : options, correctAnswer, explanation, points });
+    }
+    return questions;
   } catch {
     return null;
   }
@@ -372,6 +409,7 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
     const classIds = formData
       .getAll("classIds")
       .filter((value): value is string => typeof value === "string");
+    const folderId = text(formData, "folderId") || null;
     const examPdf = formData.get("examPdf");
     const answerPdf = formData.get("answerPdf");
     const directExamKey = text(formData, "examPdfKey");
@@ -446,6 +484,10 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
     if (existingClassCount !== new Set(classIds).size) {
       return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
     }
+    if (folderId && !(await db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { id: true } }))) {
+      return { success: false, error: "Thư mục đề thi không tồn tại." };
+    }
+    const lastPosition = await db.exam.aggregate({ where: { folderId }, _max: { position: true } });
 
     const requestedExamId = text(formData, "examId");
     const examId = requestedExamId || randomUUID();
@@ -489,6 +531,9 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
       data: {
         id: examId,
         title,
+        source: "PDF",
+        folderId,
+        position: (lastPosition._max.position ?? -1) + 1,
         mode,
         status: publishNow ? "PUBLISHED" : "DRAFT",
         publishedAt: publishNow ? new Date() : null,
@@ -543,6 +588,7 @@ export async function createExamFromQuestionBank(formData: FormData): Promise<Cr
     const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
     const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
     const questionIds = [...new Set(formData.getAll("questionIds").filter((item): item is string => typeof item === "string"))];
+    const folderId = text(formData, "folderId") || null;
     if (title.length < 3 || title.length > 150) return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
     if (!classIds.length || !questionIds.length || questionIds.length > 200) return { success: false, error: "Hãy chọn lớp và từ 1 đến 200 câu hỏi." };
     if (mode === "MOCK" && durationMinutes === undefined) return { success: false, error: "Thời lượng phải là số nguyên dương." };
@@ -552,14 +598,87 @@ export async function createExamFromQuestionBank(formData: FormData): Promise<Cr
       db.reviewQuestion.findMany({ where: { id: { in: questionIds } }, select: { id: true, content: true, type: true, options: true, correctAnswer: true, textSolution: true } }),
     ]);
     if (classCount !== classIds.length || questions.length !== questionIds.length) return { success: false, error: "Có lớp hoặc câu hỏi không còn hợp lệ." };
+    if (folderId && !(await db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { id: true } }))) return { success: false, error: "Thư mục đề thi không tồn tại." };
     const byId = new Map(questions.map((question) => [question.id, question]));
     const ordered = questionIds.map((id) => byId.get(id)!);
     const publishNow = checked(formData, "publishNow");
     const pointByType = { MULTIPLE_CHOICE: parsePositiveNumber(text(formData, "multipleChoicePoints"), 0.25), TRUE_FALSE: parsePositiveNumber(text(formData, "trueFalsePoints"), 1), SHORT_ANSWER: parsePositiveNumber(text(formData, "shortAnswerPoints"), 0.5) };
-    const exam = await db.exam.create({ data: { title, mode, examFileUrl: "", durationMinutes: durationMinutes ?? null, maxAttempts: maxAttempts ?? null, status: publishNow ? "PUBLISHED" : "DRAFT", publishedAt: publishNow ? new Date() : null, isForever: true, scoringPolicy: { trueFalseFractions: [0, 0.1, 0.25, 0.5, 1], pointByType }, examLinks: { create: classIds.map((classId) => ({ classId })) }, questions: { create: ordered.map((question, index) => ({ number: index + 1, content: question.content, type: question.type, options: Array.isArray(question.options) ? question.options.filter((item): item is string => typeof item === "string") : [], correctAnswer: question.correctAnswer, explanation: question.textSolution, points: pointByType[question.type] })) } }, select: { id: true } });
+    const lastPosition = await db.exam.aggregate({ where: { folderId }, _max: { position: true } });
+    const exam = await db.exam.create({ data: { title, source: "QUESTION_BANK", mode, folderId, position: (lastPosition._max.position ?? -1) + 1, examFileUrl: null, durationMinutes: durationMinutes ?? null, maxAttempts: maxAttempts ?? null, status: publishNow ? "PUBLISHED" : "DRAFT", publishedAt: publishNow ? new Date() : null, isForever: true, scoringPolicy: { trueFalseFractions: [0, 0.1, 0.25, 0.5, 1], pointByType }, examLinks: { create: classIds.map((classId) => ({ classId })) }, questions: { create: ordered.map((question, index) => ({ number: index + 1, content: question.content, type: question.type, options: Array.isArray(question.options) ? question.options.filter((item): item is string => typeof item === "string") : [], correctAnswer: question.correctAnswer, explanation: question.textSolution, points: pointByType[question.type] })) } }, select: { id: true } });
     revalidatePath(ADMIN_EXAMS_PATH); revalidatePath("/thi-thu");
     return { success: true, examId: exam.id };
   } catch (error) { console.error("createExamFromQuestionBank thất bại:", error); return { success: false, error: "Không thể tạo đề từ ngân hàng câu hỏi." }; }
+}
+
+export async function createManualExam(formData: FormData): Promise<CreateExamResult> {
+  try {
+    await requireActiveAdminId();
+    const title = text(formData, "title");
+    const mode = text(formData, "mode") === "PRACTICE" ? "PRACTICE" : "MOCK";
+    const durationMinutes = parsePositiveInteger(text(formData, "durationMinutes"), mode === "PRACTICE");
+    const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
+    const folderId = text(formData, "folderId") || null;
+    const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
+    const questions = parseManualQuestions(text(formData, "questions"));
+    if (title.length < 3 || title.length > 150) return { success: false, error: "Tên đề phải có từ 3 đến 150 ký tự." };
+    if (mode === "MOCK" && durationMinutes === undefined) return { success: false, error: "Thời lượng phải là số nguyên dương." };
+    if (maxAttempts === undefined) return { success: false, error: "Số lượt làm không hợp lệ." };
+    if (!classIds.length) return { success: false, error: "Hãy giao đề cho ít nhất một lớp." };
+    if (!questions) return { success: false, error: "Danh sách câu hỏi không hợp lệ. Kiểm tra nội dung, đáp án, lựa chọn và số điểm." };
+
+    const [classCount, folder, lastPosition] = await Promise.all([
+      db.class.count({ where: { id: { in: classIds }, status: "ACTIVE" } }),
+      folderId ? db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { id: true } }) : Promise.resolve({ id: "root" }),
+      db.exam.aggregate({ where: { folderId }, _max: { position: true } }),
+    ]);
+    if (classCount !== classIds.length) return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
+    if (!folder) return { success: false, error: "Thư mục đề thi không tồn tại." };
+
+    const sections = questions.reduce<ExamSection[]>((result, question) => {
+      const last = result.at(-1);
+      if (last?.type === question.type) last.count += 1;
+      else result.push({ type: question.type, count: 1, label: question.type === "MULTIPLE_CHOICE" ? "Trắc nghiệm" : question.type === "TRUE_FALSE" ? "Đúng / Sai" : "Trả lời ngắn" });
+      return result;
+    }, []);
+    const publishNow = checked(formData, "publishNow");
+    const exam = await db.exam.create({
+      data: {
+        title,
+        source: "MANUAL",
+        examFileUrl: null,
+        folderId,
+        position: (lastPosition._max.position ?? -1) + 1,
+        mode,
+        durationMinutes: durationMinutes ?? null,
+        maxAttempts: maxAttempts ?? null,
+        status: publishNow ? "PUBLISHED" : "DRAFT",
+        publishedAt: publishNow ? new Date() : null,
+        isForever: true,
+        allowDownload: false,
+        answerSheetConfig: sections,
+        scoringPolicy: { trueFalseFractions: [0, 0.1, 0.25, 0.5, 1] },
+        examLinks: { create: classIds.map((classId) => ({ classId })) },
+        questions: {
+          create: questions.map((question, index) => ({
+            number: index + 1,
+            type: question.type,
+            content: question.content,
+            options: question.options,
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            points: question.points,
+          })),
+        },
+      },
+      select: { id: true },
+    });
+    revalidatePath(ADMIN_EXAMS_PATH);
+    revalidatePath("/thi-thu");
+    return { success: true, examId: exam.id };
+  } catch (error) {
+    console.error("createManualExam thất bại:", error);
+    return { success: false, error: "Không thể tạo đề nhập thủ công." };
+  }
 }
 
 export async function updateExam(examId: string, formData: FormData): Promise<UpdateExamResult> {
@@ -572,7 +691,9 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
       select: {
         examFileUrl: true,
         answerFileUrl: true,
-        questions: { select: { id: true, type: true }, orderBy: { number: "asc" } },
+        source: true,
+        folderId: true,
+        questions: { select: { id: true, type: true, content: true, options: true, explanation: true, points: true }, orderBy: { number: "asc" } },
       },
     });
     if (!current) return { success: false, error: "Không tìm thấy đề thi." };
@@ -587,6 +708,7 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     const availableFrom = !isForever && availableFromRaw ? new Date(availableFromRaw) : null;
     const availableTo = !isForever && availableToRaw ? new Date(availableToRaw) : null;
     const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
+    const folderId = text(formData, "folderId") || null;
     const examPdf = formData.get("examPdf");
     const answerPdf = formData.get("answerPdf");
     const directExamKey = text(formData, "examPdfKey");
@@ -627,9 +749,15 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     }
     const invalidAnswer = answers.some((answer, index) => typeof answer !== "string" || !answerMatchesType(answer.trim().toUpperCase(), current.questions[index].type));
     if (invalidAnswer) return { success: false, error: "Đáp án không đúng định dạng của từng loại câu hỏi." };
+    const editedQuestions = current.source === "PDF" ? null : parseManualQuestions(text(formData, "manualQuestions"));
+    if (current.source !== "PDF" && (!editedQuestions || editedQuestions.length !== current.questions.length)) return { success: false, error: "Nội dung câu hỏi chỉnh sửa không hợp lệ." };
 
     const classCount = await db.class.count({ where: { id: { in: classIds }, status: "ACTIVE" } });
     if (classCount !== classIds.length) return { success: false, error: "Có lớp không tồn tại hoặc đã lưu trữ." };
+    if (folderId && !(await db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { id: true } }))) return { success: false, error: "Thư mục đề thi không tồn tại." };
+    const nextPosition = current.folderId === folderId
+      ? undefined
+      : ((await db.exam.aggregate({ where: { folderId }, _max: { position: true } }))._max.position ?? -1) + 1;
 
     if (directExamKey) {
       if (!isExpectedExamKey(directExamKey, examId, "exam", true)) {
@@ -669,6 +797,9 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
         where: { id: examId },
         data: {
           title,
+          source: uploadedExamKey ? "PDF" : current.source,
+          folderId,
+          position: nextPosition,
           mode,
           examFileUrl: uploadedExamKey ?? current.examFileUrl,
           answerFileUrl: nextAnswerUrl,
@@ -687,8 +818,11 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
       ...current.questions.map((question, index) => db.examQuestion.update({
         where: { id: question.id },
         data: {
-          correctAnswer: String(answers[index]).trim().toUpperCase(),
-          points: pointByType[question.type],
+          content: editedQuestions?.[index]?.content ?? question.content,
+          options: editedQuestions?.[index]?.options ?? (Array.isArray(question.options) ? question.options : []),
+          correctAnswer: editedQuestions?.[index]?.correctAnswer ?? String(answers[index]).trim().toUpperCase(),
+          explanation: editedQuestions?.[index]?.explanation ?? question.explanation,
+          points: editedQuestions?.[index]?.points ?? pointByType[question.type],
         },
       })),
     ]);
@@ -749,9 +883,10 @@ export async function closeExam(examId: string): Promise<SimpleResult> {
 export async function publishExam(examId: string): Promise<SimpleResult> {
   try {
     await requireActiveAdminId();
-    const exam = await db.exam.findUnique({ where: { id: examId }, select: { status: true, _count: { select: { questions: true, examLinks: true } } } });
+    const exam = await db.exam.findUnique({ where: { id: examId }, select: { status: true, source: true, examFileUrl: true, _count: { select: { questions: true, examLinks: true } } } });
     if (!exam) return { success: false, error: "Không tìm thấy đề." };
     if (!exam._count.questions || !exam._count.examLinks) return { success: false, error: "Đề phải có câu hỏi và ít nhất một lớp trước khi xuất bản." };
+    if (exam.source === "PDF" && !exam.examFileUrl) return { success: false, error: "Đề PDF phải có file trước khi xuất bản." };
     await db.exam.update({ where: { id: examId }, data: { status: "PUBLISHED", publishedAt: new Date() } });
     revalidatePath(ADMIN_EXAMS_PATH); revalidatePath("/thi-thu");
     return { success: true };

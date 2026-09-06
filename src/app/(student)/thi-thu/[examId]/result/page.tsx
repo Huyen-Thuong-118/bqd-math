@@ -50,15 +50,15 @@ export default async function ExamResultPage({
         <SummaryCard icon={MinusCircle} label="Bỏ trống" value={result.unansweredCount} color="text-amber-600" />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <PdfViewer
+      {(result.hasExamFile || result.hasAnswerFile) && <div className={`grid gap-4 ${result.hasExamFile && result.hasAnswerFile ? "xl:grid-cols-2" : "mx-auto max-w-4xl"}`}>
+        {result.hasExamFile && <PdfViewer
           title="Đề thi"
-          fileUrl={result.hasExamFile ? `/api/exams/${result.examId}/file/exam` : undefined}
+          fileUrl={`/api/exams/${result.examId}/file/exam`}
           allowDownload={result.allowDownload}
           watermark={result.examTitle}
-          unavailableMessage="Đề demo không có file PDF."
-        />
-        <PdfViewer
+          unavailableMessage="Không thể mở file đề."
+        />}
+        {result.hasAnswerFile && <PdfViewer
           title="Lời giải"
           muted
           fileUrl={
@@ -73,8 +73,8 @@ export default async function ExamResultPage({
               ? "Giáo viên đang ẩn lời giải."
               : "Đề chưa có file lời giải."
           }
-        />
-      </div>
+        />}
+      </div>}
 
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-navy-600">Chi tiết đáp án</h2>

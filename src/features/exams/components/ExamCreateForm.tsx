@@ -7,8 +7,10 @@ import { ScanText } from "lucide-react";
 import { analyzeExamPdf, createExam, discardExamUpload } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
 import { uploadExamPdf } from "./exam-upload";
+import { InlineExamFolderCreator } from "./InlineExamFolderCreator";
 
-type ClassOption = { id: string; name: string; level: string };
+type ClassOption = { id: string; name: string; code: string; level: string };
+type FolderOption = { id: string; label: string };
 type Section = { label: string; count: number; type: ExamQuestionType };
 
 const STANDARD_SECTIONS: Section[] = [
@@ -41,7 +43,7 @@ type UploadedFiles = {
   answerKey?: string;
 };
 
-export function ExamCreateForm({ classes, directUpload }: { classes: ClassOption[]; directUpload: boolean }) {
+export function ExamCreateForm({ classes, folders, directUpload }: { classes: ClassOption[]; folders: FolderOption[]; directUpload: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -177,6 +179,8 @@ export function ExamCreateForm({ classes, directUpload }: { classes: ClassOption
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
           <label className="text-sm font-medium text-navy-500 sm:col-span-2">Tên đề<input name="title" required minLength={3} maxLength={150} className={inputClass} placeholder="Ví dụ: Đề thi tốt nghiệp THPT 2026 — mã 0102" /></label>
+          <label className="text-sm font-medium text-navy-500 sm:col-span-2">Thư mục<select name="folderId" className={inputClass}><option value="">Thư mục gốc</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.label}</option>)}</select></label>
+          <InlineExamFolderCreator folders={folders} />
           <label className="text-sm font-medium text-navy-500">File đề PDF (bắt buộc, tối đa 20 MB)<input name="examPdf" required type="file" accept="application/pdf,.pdf" className={inputClass} onChange={(event) => setExamPdf(event.target.files?.[0])} /></label>
           <label className="text-sm font-medium text-navy-500">File đáp án / lời giải PDF (không bắt buộc)<input name="answerPdf" type="file" accept="application/pdf,.pdf" className={inputClass} onChange={(event) => setAnswerPdf(event.target.files?.[0])} /></label>
           <div className="sm:col-span-2"><button type="button" disabled={isAnalyzing || !examPdf} onClick={handleOcr} className="inline-flex items-center gap-2 rounded-full bg-pastel-100 px-4 py-2 text-sm font-semibold text-navy-500 disabled:opacity-50"><ScanText className="size-4" />{isAnalyzing ? "Gemini đang đọc đề và đáp án…" : "Quét bằng Gemini"}</button>{ocrMessage && <p className="mt-2 text-sm text-green-700">{ocrMessage}</p>}</div>
@@ -191,7 +195,7 @@ export function ExamCreateForm({ classes, directUpload }: { classes: ClassOption
           {!isForever && <><label className="text-sm font-medium text-navy-500">Mở từ<input name="availableFrom" required type="datetime-local" className={inputClass} /></label><label className="text-sm font-medium text-navy-500">Đóng lúc<input name="availableTo" required type="datetime-local" className={inputClass} /></label></>}
           <div className="grid gap-3 text-sm text-navy-500 sm:col-span-2 sm:grid-cols-3"><label className="flex gap-2"><input name="allowDownload" type="checkbox" /> Cho phép tải PDF</label><label className="flex gap-2"><input name="showAnswer" type="checkbox" /> Hiện lời giải sau khi nộp</label><label className="flex gap-2"><input name="hideWrongAnswers" type="checkbox" /> Ẩn đáp án đúng nếu làm sai</label></div>
           <label className="flex items-center gap-2 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800 sm:col-span-2"><input name="publishNow" type="checkbox" defaultChecked /> Xuất bản ngay sau khi tạo (bỏ chọn để lưu nháp)</label>
-          <div className="sm:col-span-2"><p className="text-sm font-medium text-navy-500">Giao cho lớp</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" />{item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div>{classes.length === 0 && <p className="mt-2 text-sm text-amber-700">Chưa có lớp đang hoạt động. Hãy tạo lớp trước.</p>}</div>
+          <div className="sm:col-span-2"><p className="text-sm font-medium text-navy-500">Giao cho lớp</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" />{item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div>{classes.length === 0 && <p className="mt-2 text-sm text-amber-700">Chưa có lớp đang hoạt động. Hãy tạo lớp trước.</p>}</div>
         </section>
 
         <section className="space-y-4 rounded-3xl border border-navy-100 bg-white p-5">

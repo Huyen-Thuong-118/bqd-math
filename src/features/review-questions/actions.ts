@@ -7,9 +7,15 @@ import { requireActiveStudentId } from "@/features/exams/access";
 import { db } from "@/lib/db";
 import { buildStreamPlaybackUrl, getSignedStreamToken } from "@/lib/stream";
 
+import { parseReviewQuestionFilters } from "./filters";
+import { getQuestionBankPage } from "./queries";
+
 type Result = { success: true } | { success: false; error: string };
 export type ReviewAnswerResult =
   | { success: true; correct: boolean; solutionVisible: boolean; correctAnswer: string; textSolution: string | null; solutionImageUrl: string | null; videoUrl: string | null; attempts: number; correctRate: number }
+  | { success: false; error: string };
+export type QuestionBankSearchResult =
+  | { success: true; data: Awaited<ReturnType<typeof getQuestionBankPage>> }
   | { success: false; error: string };
 
 function text(formData: FormData, key: string) { const value = formData.get(key); return typeof value === "string" ? value.trim() : ""; }
@@ -47,6 +53,18 @@ async function validateRelations(chapterId: string, classIds: string[]) {
 
 export async function createChapter(formData: FormData): Promise<Result> {
   try { await requireActiveAdminId(); const name = text(formData, "name"); const order = Number(text(formData, "order") || 0); if (name.length < 2 || name.length > 120 || !Number.isInteger(order)) return { success: false, error: "Thông tin chương không hợp lệ." }; await db.chapter.create({ data: { name, order } }); refresh(); return { success: true }; } catch (error) { console.error("createChapter thất bại:", error); return { success: false, error: "Không thể tạo chương." }; }
+}
+
+export async function searchQuestionBank(
+  input: Record<string, string>,
+): Promise<QuestionBankSearchResult> {
+  try {
+    const filters = parseReviewQuestionFilters(input);
+    return { success: true, data: await getQuestionBankPage(filters) };
+  } catch (error) {
+    console.error("searchQuestionBank thất bại:", error);
+    return { success: false, error: "Không thể tải ngân hàng câu hỏi." };
+  }
 }
 
 export async function createReviewQuestion(formData: FormData): Promise<Result> {

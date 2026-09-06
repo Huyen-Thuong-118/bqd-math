@@ -12,6 +12,7 @@ export async function getClassesForCurrentStudent() {
     select: {
       id: true,
       name: true,
+      code: true,
       level: true,
       schedule: true,
       scheduleSlots: { select: { dayOfWeek: true, startTime: true, endTime: true }, orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] },
@@ -31,6 +32,7 @@ export async function getClassForCurrentStudent(classId: string) {
     select: {
       id: true,
       name: true,
+      code: true,
       level: true,
       schedule: true,
       scheduleSlots: { select: { dayOfWeek: true, startTime: true, endTime: true }, orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] },

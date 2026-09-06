@@ -79,7 +79,7 @@ async function main() {
       },
     });
     studentId = student.id;
-    await db.class.create({ data: { id: classId, name: "Class Slice 2", level: "BASIC", schedule: "Test" } });
+    await db.class.create({ data: { id: classId, name: "Class Slice 2", code: `SLICE2-${suffix.toUpperCase()}`, level: "BASIC", schedule: "Test" } });
     await db.classEnrollment.create({ data: { classId, studentId } });
     await db.exam.create({
       data: {

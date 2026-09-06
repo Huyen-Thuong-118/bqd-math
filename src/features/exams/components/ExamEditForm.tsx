@@ -7,12 +7,16 @@ import { useRouter } from "next/navigation";
 import { discardExamUpload, updateExam } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
 import { uploadExamPdf } from "./exam-upload";
+import { InlineExamFolderCreator } from "./InlineExamFolderCreator";
 
-type ClassOption = { id: string; name: string; level: string };
-type EditableQuestion = { number: number; type: ExamQuestionType; correctAnswer: string };
+type ClassOption = { id: string; name: string; code: string; level: string };
+type FolderOption = { id: string; label: string };
+type EditableQuestion = { number: number; type: ExamQuestionType; content: string; options: string[]; correctAnswer: string; explanation: string | null; points: number };
 type EditableExam = {
   id: string;
   title: string;
+  source: "PDF" | "QUESTION_BANK" | "MANUAL";
+  folderId: string | null;
   mode: "MOCK" | "PRACTICE";
   status: "DRAFT" | "PUBLISHED" | "CLOSED";
   durationMinutes: number | null;
@@ -34,21 +38,28 @@ type EditableExam = {
 
 const input = "mt-1 w-full rounded-xl border border-navy-100 bg-white px-3 py-2.5 text-sm text-navy-600 outline-none focus:border-navy-400";
 
-export function ExamEditForm({ exam, classes, directUpload }: { exam: EditableExam; classes: ClassOption[]; directUpload: boolean }) {
+export function ExamEditForm({ exam, classes, folders, directUpload }: { exam: EditableExam; classes: ClassOption[]; folders: FolderOption[]; directUpload: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
   const [mode, setMode] = useState(exam.mode);
   const [isForever, setIsForever] = useState(exam.isForever);
   const [answers, setAnswers] = useState(exam.questions.map((question) => question.correctAnswer));
+  const [questionDetails, setQuestionDetails] = useState(exam.questions);
 
   function setAnswer(index: number, value: string) {
     setAnswers((current) => current.map((answer, itemIndex) => itemIndex === index ? value : answer));
+    setQuestionDetails((current) => current.map((question, itemIndex) => itemIndex === index ? { ...question, correctAnswer: value } : question));
+  }
+
+  function updateQuestion(index: number, patch: Partial<EditableQuestion>) {
+    setQuestionDetails((current) => current.map((question, itemIndex) => itemIndex === index ? { ...question, ...patch } : question));
   }
 
   function submit(formData: FormData) {
     setError(undefined);
     formData.set("answerKey", JSON.stringify(answers));
+    if (exam.source !== "PDF") formData.set("manualQuestions", JSON.stringify(questionDetails));
     startTransition(async () => {
       const uploadedKeys: string[] = [];
       if (directUpload) {
@@ -98,8 +109,10 @@ export function ExamEditForm({ exam, classes, directUpload }: { exam: EditableEx
       {exam.attemptCount > 0 && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Đề đã có {exam.attemptCount} lượt làm. Điểm và đáp án của các bài đã nộp được giữ nguyên theo bản chụp; thay đổi mới chỉ áp dụng cho lượt nộp sau.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
-          <div className="sm:col-span-2"><p className="text-xs font-semibold uppercase tracking-wide text-navy-300">{exam.status === "DRAFT" ? "Bản nháp" : exam.status === "PUBLISHED" ? "Đã xuất bản" : "Đã đóng"}</p><h2 className="mt-1 font-semibold text-navy-600">Thông tin đề</h2></div>
+          <div className="sm:col-span-2"><p className="text-xs font-semibold uppercase tracking-wide text-navy-300">{exam.status === "DRAFT" ? "Bản nháp" : exam.status === "PUBLISHED" ? "Đã xuất bản" : "Đã đóng"} · {exam.source === "PDF" ? "PDF" : exam.source === "QUESTION_BANK" ? "Ngân hàng câu hỏi" : "Nhập thủ công"}</p><h2 className="mt-1 font-semibold text-navy-600">Thông tin đề</h2></div>
           <label className="text-sm font-medium text-navy-500 sm:col-span-2">Tên đề<input name="title" required minLength={3} maxLength={150} defaultValue={exam.title} className={input} /></label>
+          <label className="text-sm font-medium text-navy-500 sm:col-span-2">Thư mục<select name="folderId" defaultValue={exam.folderId ?? ""} className={input}><option value="">Thư mục gốc</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.label}</option>)}</select></label>
+          <InlineExamFolderCreator folders={folders} />
           <label className="text-sm font-medium text-navy-500">Thay file đề PDF {exam.hasExamPdf ? "(bỏ trống để giữ file cũ)" : "(hiện là đề từ ngân hàng câu hỏi)"}<input name="examPdf" type="file" accept="application/pdf,.pdf" className={input} /></label>
           <label className="text-sm font-medium text-navy-500">Thay/thêm file lời giải PDF<input name="answerPdf" type="file" accept="application/pdf,.pdf" className={input} /></label>
           {exam.hasSolution && <label className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700 sm:col-span-2"><input name="removeSolution" type="checkbox" />Xóa file lời giải hiện tại</label>}
@@ -113,14 +126,17 @@ export function ExamEditForm({ exam, classes, directUpload }: { exam: EditableEx
           <div className="rounded-xl bg-pastel-50 p-3 text-sm"><label className="flex items-center gap-2 font-medium text-navy-500"><input name="isForever" type="checkbox" checked={isForever} onChange={(event) => setIsForever(event.target.checked)} />Mở vĩnh viễn</label></div>
           {!isForever && <><label className="text-sm font-medium text-navy-500">Mở từ<input name="availableFrom" required type="datetime-local" defaultValue={exam.availableFrom} className={input} /></label><label className="text-sm font-medium text-navy-500">Đóng lúc<input name="availableTo" required type="datetime-local" defaultValue={exam.availableTo} className={input} /></label></>}
           <div className="grid gap-3 text-sm text-navy-500 sm:col-span-2 sm:grid-cols-3"><label className="flex gap-2"><input name="allowDownload" type="checkbox" defaultChecked={exam.allowDownload} /> Cho phép tải PDF</label><label className="flex gap-2"><input name="showAnswer" type="checkbox" defaultChecked={exam.showAnswer} /> Hiện lời giải sau khi nộp</label><label className="flex gap-2"><input name="hideWrongAnswers" type="checkbox" defaultChecked={exam.hideWrongAnswers} /> Ẩn đáp án đúng nếu làm sai</label></div>
-          <fieldset className="sm:col-span-2"><legend className="text-sm font-medium text-navy-500">Giao cho lớp</legend><div className="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" defaultChecked={exam.classIds.includes(item.id)} />{item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div></fieldset>
+          <fieldset className="sm:col-span-2"><legend className="text-sm font-medium text-navy-500">Giao cho lớp</legend><div className="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" defaultChecked={exam.classIds.includes(item.id)} />{item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div></fieldset>
         </section>
 
         <section className="space-y-4 rounded-3xl border border-navy-100 bg-white p-5">
           <div><h2 className="font-semibold text-navy-600">Đáp án và thang điểm</h2><p className="mt-1 text-sm text-navy-300">Có thể sửa key chấm tự động mà không làm đổi kết quả các bài đã nộp.</p></div>
-          <div className="grid gap-3 sm:grid-cols-4"><label className="text-xs text-navy-400">Điểm/câu trắc nghiệm<input className={input} name="multipleChoicePoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.MULTIPLE_CHOICE} /></label><label className="text-xs text-navy-400">Điểm/câu đúng-sai<input className={input} name="trueFalsePoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.TRUE_FALSE} /></label><label className="text-xs text-navy-400">Điểm/câu trả lời ngắn<input className={input} name="shortAnswerPoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.SHORT_ANSWER} /></label><label className="text-xs text-navy-400">Chính sách đúng-sai<select className={input} name="trueFalsePolicy" defaultValue={exam.trueFalsePolicy}><option value="STANDARD">0 / 0,1 / 0,25 / 0,5 / 1</option><option value="ALL_OR_NOTHING">Đúng hết mới có điểm</option></select></label></div>
+          <div className="grid gap-3 sm:grid-cols-4">{exam.source === "PDF" && <><label className="text-xs text-navy-400">Điểm/câu trắc nghiệm<input className={input} name="multipleChoicePoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.MULTIPLE_CHOICE} /></label><label className="text-xs text-navy-400">Điểm/câu đúng-sai<input className={input} name="trueFalsePoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.TRUE_FALSE} /></label><label className="text-xs text-navy-400">Điểm/câu trả lời ngắn<input className={input} name="shortAnswerPoints" type="number" min="0.01" step="0.01" defaultValue={exam.points.SHORT_ANSWER} /></label></>}<label className="text-xs text-navy-400">Chính sách đúng-sai<select className={input} name="trueFalsePolicy" defaultValue={exam.trueFalsePolicy}><option value="STANDARD">0 / 0,1 / 0,25 / 0,5 / 1</option><option value="ALL_OR_NOTHING">Đúng hết mới có điểm</option></select></label></div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {exam.questions.map((question, index) => <div key={question.number} className="rounded-2xl bg-pastel-50 p-3 text-xs font-semibold text-navy-400"><p>Câu {question.number}</p>{question.type === "MULTIPLE_CHOICE" ? <select required value={answers[index]} onChange={(event) => setAnswer(index, event.target.value)} className={input}><option value="">Chọn đáp án</option><option>A</option><option>B</option><option>C</option><option>D</option></select> : question.type === "TRUE_FALSE" ? <div className="mt-2 grid grid-cols-4 gap-1">{answers[index].split(",").map((answer, statementIndex) => <label key={statementIndex} className="text-center">{String.fromCharCode(97 + statementIndex)}<select required value={answer} onChange={(event) => { const values = answers[index].split(","); values[statementIndex] = event.target.value; setAnswer(index, values.join(",")); }} className="mt-1 w-full rounded-lg border border-navy-100 bg-white p-1.5"><option value="">—</option><option value="D">Đ</option><option value="S">S</option></select></label>)}</div> : <input required value={answers[index]} maxLength={50} onChange={(event) => setAnswer(index, event.target.value)} className={input} placeholder="Đáp án ngắn" />}</div>)}
+            {exam.questions.map((question, index) => {
+              const detail = questionDetails[index];
+              return <div key={question.number} className="rounded-2xl bg-pastel-50 p-3 text-xs font-semibold text-navy-400"><p>Câu {question.number}</p>{exam.source !== "PDF" && <><textarea required value={detail.content} onChange={(event) => updateQuestion(index, { content: event.target.value })} maxLength={4000} rows={3} aria-label={`Nội dung câu ${question.number}`} className={input} />{detail.options.map((option, optionIndex) => <input key={optionIndex} required value={option} onChange={(event) => updateQuestion(index, { options: detail.options.map((item, itemIndex) => itemIndex === optionIndex ? event.target.value : item) })} maxLength={1000} aria-label={`Lựa chọn ${optionIndex + 1} câu ${question.number}`} className={input} />)}<label className="block">Điểm<input value={detail.points} onChange={(event) => updateQuestion(index, { points: Number(event.target.value) })} type="number" min="0.01" max="100" step="0.01" className={input} /></label><textarea value={detail.explanation ?? ""} onChange={(event) => updateQuestion(index, { explanation: event.target.value })} maxLength={10000} rows={2} placeholder="Lời giải (không bắt buộc)" className={input} /></>}{question.type === "MULTIPLE_CHOICE" ? <select required value={answers[index]} onChange={(event) => setAnswer(index, event.target.value)} className={input}><option value="">Chọn đáp án</option><option>A</option><option>B</option><option>C</option><option>D</option></select> : question.type === "TRUE_FALSE" ? <div className="mt-2 grid grid-cols-4 gap-1">{answers[index].split(",").map((answer, statementIndex) => <label key={statementIndex} className="text-center">{String.fromCharCode(97 + statementIndex)}<select required value={answer} onChange={(event) => { const values = answers[index].split(","); values[statementIndex] = event.target.value; setAnswer(index, values.join(",")); }} className="mt-1 w-full rounded-lg border border-navy-100 bg-white p-1.5"><option value="">—</option><option value="D">Đ</option><option value="S">S</option></select></label>)}</div> : <input required value={answers[index]} maxLength={50} onChange={(event) => setAnswer(index, event.target.value)} className={input} placeholder="Đáp án ngắn" />}</div>;
+            })}
           </div>
         </section>
       </fieldset>

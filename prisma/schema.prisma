@@ -48,6 +48,7 @@ model User {
   // đó; STUDENT ràng buộc bắt buộc khác nhau vẫn validate đủ ở form + server
   // action đăng ký (features/auth/actions/register.ts).
   studentPhone String? @unique
+  studentCode  String? @unique // mã quản lý ổn định, không phải thông tin xác thực
   parentPhone  String? // SĐT phụ huynh — dùng gửi SMS, bắt buộc khác studentPhone (validate ở form)
 
   // CHỈ lưu hash 1 chiều (bcrypt) — KHÔNG BAO GIỜ lưu mật khẩu dạng đọc/giải
@@ -154,6 +155,7 @@ enum ClassStatus {
 model Class {
   id          String      @id @default(cuid())
   name        String
+  code        String      @unique
   // level phân loại lớp Cơ bản/Nâng cao. schedule được giữ để tương thích dữ
   // liệu cũ; lịch mới dùng ClassScheduleSlot để một lớp có thể học nhiều buổi.
   level       ClassLevel @default(BASIC)
@@ -207,16 +209,26 @@ model ClassEnrollment {
 
 // ---------------- TÀI LIỆU ----------------
 
+enum FolderKind {
+  DOCUMENT
+  EXAM
+}
+
 model Folder {
-  id       String   @id @default(cuid())
+  id       String     @id @default(cuid())
   name     String
+  kind     FolderKind @default(DOCUMENT)
+  position Int        @default(0)
   parentId String?
-  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
-  children Folder[] @relation("FolderTree")
+  parent   Folder?    @relation("FolderTree", fields: [parentId], references: [id])
+  children Folder[]   @relation("FolderTree")
 
   documents Document[]
+  exams     Exam[]
 
   createdAt DateTime @default(now())
+
+  @@index([kind, parentId, position])
 }
 
 model Document {
@@ -234,6 +246,7 @@ model Document {
   class      Class?            @relation(fields: [classId], references: [id])
   folderId   String?
   folder     Folder?           @relation(fields: [folderId], references: [id])
+  position   Int               @default(0)
   classLinks DocumentClass[]
   versions   DocumentVersion[]
 
@@ -243,6 +256,8 @@ model Document {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([folderId, position])
 }
 
 // N-N để một tài liệu có thể giao cho nhiều lớp mà không nhân bản file.
@@ -272,6 +287,12 @@ model DocumentVersion {
 
 // ---------------- ĐỀ THI ----------------
 
+enum ExamSource {
+  PDF
+  QUESTION_BANK
+  MANUAL
+}
+
 model Exam {
   id    String @id @default(cuid())
   title String
@@ -281,6 +302,7 @@ model Exam {
   status        ExamStatus @default(DRAFT)
   publishedAt   DateTime?
   scoringPolicy Json?
+  source        ExamSource @default(PDF)
 
   // DEPRECATED: dùng examLinks (ExamClass, N-N) thay cho quan hệ 1-N đơn này
   // — giữ tạm vì đã tồn tại từ code cũ, hiện KHÔNG có nơi nào trong src/
@@ -289,9 +311,13 @@ model Exam {
   classId String?
   class   Class?  @relation(fields: [classId], references: [id])
 
-  examFileUrl   String // luôn hiện với HS
+  examFileUrl   String? // chỉ bắt buộc khi source = PDF
   answerFileUrl String? // GV quyết định có hiện hay không
   showAnswer    Boolean @default(false)
+
+  folderId String?
+  folder   Folder? @relation(fields: [folderId], references: [id])
+  position Int     @default(0)
 
   // Cấu hình giao đề (giống Azota)
   isForever     Boolean   @default(true)
@@ -313,6 +339,8 @@ model Exam {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([folderId, position])
 }
 
 // Câu hỏi có cấu trúc để server chấm được. correctAnswer TUYỆT ĐỐI không

@@ -25,7 +25,7 @@ const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   "account-suspended": "Tài khoản đã bị thu hồi quyền truy cập",
 };
 
-export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
+export function LoginForm({ googleEnabled, passwordChanged = false }: { googleEnabled: boolean; passwordChanged?: boolean }) {
   const router = useRouter();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -75,6 +75,11 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
       </div>
 
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        {passwordChanged && (
+          <p role="status" className="rounded-2xl bg-green-50 px-4 py-2.5 text-sm text-green-700">
+            Đổi mật khẩu thành công. Hãy đăng nhập lại bằng mật khẩu mới.
+          </p>
+        )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="identifier" className="text-sm font-medium text-navy-500">
             Số điện thoại hoặc Email
@@ -108,6 +113,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
               name="password"
               type={showPassword ? "text" : "password"}
               autoComplete="current-password"
+              maxLength={128}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               aria-invalid={Boolean(errors.password)}

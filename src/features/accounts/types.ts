@@ -18,6 +18,7 @@ export type StudentAccount = Pick<
   | "id"
   | "name"
   | "email"
+  | "studentCode"
   | "studentPhone"
   | "parentPhone"
   | "status"

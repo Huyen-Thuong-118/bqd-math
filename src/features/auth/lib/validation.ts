@@ -54,6 +54,7 @@ export function validateEmail(value: string): FieldError {
 export function validateRegisterPassword(value: string): FieldError {
   if (!value) return "Vui lòng nhập mật khẩu";
   if (value.length < 8) return "Mật khẩu phải có ít nhất 8 ký tự";
+  if (value.length > 128) return "Mật khẩu không được vượt quá 128 ký tự";
   if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
     return "Mật khẩu phải có ít nhất 1 chữ và 1 số";
   }

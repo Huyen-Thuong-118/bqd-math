@@ -12,7 +12,7 @@ export default async function AdminClassesPage() {
   const [classRows, students, weeklySchedule] = await Promise.all([
     db.class.findMany({
       select: {
-        id: true, name: true, level: true, schedule: true, description: true, status: true,
+        id: true, name: true, code: true, level: true, schedule: true, description: true, status: true,
         scheduleSlots: { select: { dayOfWeek: true, startTime: true, endTime: true }, orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }] },
         announcements: { select: { id: true, title: true, content: true, isVisible: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 50 },
         enrollments: { select: { studentId: true } },
@@ -22,14 +22,14 @@ export default async function AdminClassesPage() {
       },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }),
-    db.user.findMany({ where: { role: "STUDENT", status: "ACTIVE" }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" } }),
+    db.user.findMany({ where: { role: "STUDENT", status: "ACTIVE" }, select: { id: true, name: true, email: true, studentCode: true }, orderBy: { name: "asc" } }),
     getAdminWeeklySchedule(),
   ]);
   const classes = classRows.map((item) => {
     const attempts = item.examLinks.flatMap((link) => link.exam.attempts);
     const scores = attempts.map((attempt) => attempt.score).filter((score): score is number => score !== null);
     return {
-      id: item.id, name: item.name, level: item.level, legacySchedule: item.schedule, scheduleSlots: item.scheduleSlots, description: item.description, status: item.status,
+      id: item.id, name: item.name, code: item.code, level: item.level, legacySchedule: item.schedule, scheduleSlots: item.scheduleSlots, description: item.description, status: item.status,
       studentIds: item.enrollments.map((row) => row.studentId),
       announcements: item.announcements.map((announcement) => ({ ...announcement, createdAt: announcement.createdAt.toISOString() })),
       counts: { students: item.enrollments.length, documents: item.documentLinks.length, questions: item.questionLinks.length, exams: item.examLinks.length },

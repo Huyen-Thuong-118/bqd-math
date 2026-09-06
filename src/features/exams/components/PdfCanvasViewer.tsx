@@ -50,7 +50,7 @@ export default function PdfCanvasViewer({
             type="button"
             aria-label="Thu nhỏ"
             onClick={() => setZoom((value) => Math.max(0.6, value - 0.1))}
-            className="rounded-full p-2 text-navy-400 hover:bg-pastel-50"
+            className="flex size-11 items-center justify-center rounded-full text-navy-400 hover:bg-pastel-50"
           >
             <Minus className="size-4" />
           </button>
@@ -61,14 +61,14 @@ export default function PdfCanvasViewer({
             type="button"
             aria-label="Phóng to"
             onClick={() => setZoom((value) => Math.min(2, value + 0.1))}
-            className="rounded-full p-2 text-navy-400 hover:bg-pastel-50"
+            className="flex size-11 items-center justify-center rounded-full text-navy-400 hover:bg-pastel-50"
           >
             <Plus className="size-4" />
           </button>
           {allowDownload && (
             <a
               href={`${fileUrl}?download=1`}
-              className="ml-1 rounded-full p-2 text-navy-400 hover:bg-pastel-50"
+              className="ml-1 flex size-11 items-center justify-center rounded-full text-navy-400 hover:bg-pastel-50"
               aria-label="Tải PDF"
             >
               <Download className="size-4" />

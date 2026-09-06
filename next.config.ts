@@ -26,10 +26,11 @@ const nextConfig: NextConfig = {
   deploymentId: process.env.DEPLOYMENT_VERSION,
   poweredByHeader: false,
   experimental: {
-    // PDF production được upload thẳng lên Cloud Storage bằng signed URL. Server Action
-    // chỉ nhận metadata, đáp án và storage key; giới hạn thấp giúp giảm rủi ro
-    // request bất thường và giữ payload đi qua Cloud Run ở mức nhỏ.
-    serverActions: { bodySizeLimit: "2mb" },
+    // Local chưa có Cloud Storage nên Server Action có thể nhận cùng lúc hai PDF,
+    // mỗi file tối đa 20 MB. Chừa thêm dung lượng cho multipart/form-data.
+    // Production upload thẳng lên Cloud Storage bằng signed URL và chỉ gửi metadata,
+    // vì vậy vẫn giữ giới hạn thấp để giảm mức dùng tài nguyên và rủi ro request lớn.
+    serverActions: { bodySizeLimit: isDevelopment ? "41mb" : "2mb" },
   },
   async headers() {
     return [

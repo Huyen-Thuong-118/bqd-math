@@ -23,6 +23,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
   const [marked, setMarked] = useState<Set<number>>(new Set());
+  const [mobilePane, setMobilePane] = useState<"answers" | "pdf">("answers");
   const submittingRef = useRef(false);
   const { answers, selectAnswer, flushNow, saveStatus } = useAnswerBuffer(
     attempt.id,
@@ -93,9 +94,16 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
         </div>
       </header>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(24rem,0.75fr)]">
-        <PdfViewer title="Đề thi" fileUrl={attempt.hasExamFile ? `/api/exams/${attempt.examId}/file/exam` : undefined} allowDownload={attempt.allowDownload} watermark={attempt.examTitle} unavailableMessage="Đề demo hiện dùng nội dung câu hỏi tích hợp." />
-        <div className="xl:sticky xl:top-40"><AnswerSheet questions={attempt.questions} answers={answers} disabled={isSubmitting} onAnswer={selectAnswer} marked={marked} onToggleMarked={(number) => setMarked((current) => { const next = new Set(current); if (next.has(number)) next.delete(number); else next.add(number); return next; })} /><p className="mt-2 px-2 text-xs text-navy-300">Màu vàng là câu đã đánh dấu xem lại. Lời giải chỉ xuất hiện sau khi nộp nếu giáo viên cho phép.</p></div>
+      {attempt.hasExamFile && (
+        <div className="sticky top-[8.5rem] z-10 grid grid-cols-2 rounded-2xl border border-navy-100 bg-white p-1 shadow-sm xl:hidden" role="tablist" aria-label="Nội dung bài thi">
+          <button type="button" role="tab" aria-selected={mobilePane === "answers"} aria-controls="exam-answer-pane" onClick={() => setMobilePane("answers")} className={`min-h-11 rounded-xl px-3 text-sm font-semibold ${mobilePane === "answers" ? "bg-navy-600 text-white" : "text-navy-400"}`}>Bài làm</button>
+          <button type="button" role="tab" aria-selected={mobilePane === "pdf"} aria-controls="exam-pdf-pane" onClick={() => setMobilePane("pdf")} className={`min-h-11 rounded-xl px-3 text-sm font-semibold ${mobilePane === "pdf" ? "bg-navy-600 text-white" : "text-navy-400"}`}>Xem PDF</button>
+        </div>
+      )}
+
+      <div className={attempt.hasExamFile ? "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(24rem,0.75fr)]" : "mx-auto max-w-4xl"}>
+        {attempt.hasExamFile && <div id="exam-pdf-pane" role="tabpanel" className={mobilePane === "pdf" ? "min-w-0" : "hidden min-w-0 xl:block"}><PdfViewer title="Đề thi" fileUrl={`/api/exams/${attempt.examId}/file/exam`} allowDownload={attempt.allowDownload} watermark={attempt.examTitle} unavailableMessage="Không thể mở file đề." /></div>}
+        <div id="exam-answer-pane" role={attempt.hasExamFile ? "tabpanel" : undefined} className={`${attempt.hasExamFile && mobilePane === "pdf" ? "hidden xl:block" : ""} min-w-0 ${attempt.hasExamFile ? "xl:sticky xl:top-40" : ""}`}><AnswerSheet questions={attempt.questions} answers={answers} disabled={isSubmitting} onAnswer={selectAnswer} marked={marked} onToggleMarked={(number) => setMarked((current) => { const next = new Set(current); if (next.has(number)) next.delete(number); else next.add(number); return next; })} /><p className="mt-2 px-2 text-xs text-navy-300">Màu vàng là câu đã đánh dấu xem lại. Lời giải chỉ xuất hiện sau khi nộp nếu giáo viên cho phép.</p></div>
       </div>
 
       {error && (

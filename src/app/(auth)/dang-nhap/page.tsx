@@ -7,6 +7,11 @@ export const metadata: Metadata = {
   title: "Đăng nhập | BQD Math",
 };
 
-export default function LoginPage() {
-  return <LoginForm googleEnabled={isGoogleAuthConfigured()} />;
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ passwordChanged?: string | string[] }>;
+}) {
+  const query = await searchParams;
+  return <LoginForm googleEnabled={isGoogleAuthConfigured()} passwordChanged={query.passwordChanged === "1"} />;
 }
