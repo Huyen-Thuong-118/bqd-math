@@ -20,10 +20,11 @@ bash scripts/deploy-gcp-production.sh
 ```
 
 Script tự cấp IAM, tạo các khóa ngẫu nhiên còn thiếu, migration, seed ADMIN,
-build/deploy, cấu hình Auth URL, CORS và Cloud Scheduler. Script chỉ hỏi các giá
-trị nó không thể tự sinh: Gemini API key, Resend API key/email gửi và thông tin
-đăng nhập ADMIN. Nếu bước nào lỗi, script dừng ngay và có thể chạy lại an toàn;
-các tài nguyên/secret đã tạo sẽ được tái sử dụng.
+build/deploy, cấu hình Auth URL, Google Login tùy chọn, CORS và Cloud Scheduler.
+Script chỉ hỏi các giá trị nó không thể tự sinh: Gemini API key, Resend API
+key/email gửi, thông tin ADMIN và Google OAuth Client ID/Secret. Nếu bước nào
+lỗi, script dừng ngay và có thể chạy lại an toàn; các tài nguyên/secret đã tạo
+sẽ được tái sử dụng.
 
 Các mục tiếp theo giải thích từng bước mà script thực hiện.
 

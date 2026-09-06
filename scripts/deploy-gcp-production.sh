@@ -259,6 +259,45 @@ gcloud run services update "$SERVICE_NAME" \
   --region="$GCP_REGION" \
   --update-env-vars="AUTH_URL=$APP_URL,NEXTAUTH_URL=$APP_URL" >/dev/null
 
+section "Cấu hình Google Login"
+CONFIGURE_GOOGLE="no"
+if secret_exists google-client-id && secret_exists google-client-secret; then
+  CONFIGURE_GOOGLE="yes"
+  printf 'Đã có Google OAuth Client ID/Secret; sẽ gắn vào Cloud Run.\n'
+else
+  printf 'Cloud Run URL: %s\n' "$APP_URL"
+  printf 'Authorized JavaScript origin: %s\n' "$APP_URL"
+  printf 'Authorized redirect URI: %s/api/auth/callback/google\n' "$APP_URL"
+  printf '\nTạo OAuth Client loại Web application tại:\n'
+  printf 'https://console.cloud.google.com/auth/clients?project=%s\n\n' "$GCP_PROJECT_ID"
+
+  GOOGLE_CHOICE=""
+  read -r -p "Cấu hình Google Login ngay? [Y/n]: " GOOGLE_CHOICE
+  GOOGLE_CHOICE="${GOOGLE_CHOICE:-Y}"
+  if [[ "$GOOGLE_CHOICE" =~ ^[Yy]$ ]]; then
+    read -r -p "Nhấn Enter sau khi đã tạo OAuth Client trong Google Cloud Console..."
+    prompt_text_if_missing google-client-id "Google OAuth Client ID"
+    prompt_secret_if_missing google-client-secret "Google OAuth Client Secret"
+    CONFIGURE_GOOGLE="yes"
+  else
+    printf 'Bỏ qua Google Login; đăng nhập email/mật khẩu vẫn hoạt động.\n'
+  fi
+fi
+
+if [[ "$CONFIGURE_GOOGLE" == "yes" ]]; then
+  for secret_id in google-client-id google-client-secret; do
+    gcloud secrets add-iam-policy-binding "$secret_id" \
+      --project="$GCP_PROJECT_ID" \
+      --member="serviceAccount:$RUNTIME_SA" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+  done
+
+  gcloud run services update "$SERVICE_NAME" \
+    --project="$GCP_PROJECT_ID" \
+    --region="$GCP_REGION" \
+    --update-secrets="GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest" >/dev/null
+fi
+
 section "Cấu hình CORS cho Cloud Storage"
 CORS_FILE="$(mktemp)"
 jq -n --arg origin "$APP_URL" '[{
@@ -301,3 +340,6 @@ section "Kiểm tra website"
 curl --fail --show-error --silent "$APP_URL/api/health"
 printf '\n\nDeploy production thành công: %s\n' "$APP_URL"
 printf 'Đăng nhập bằng email và mật khẩu ADMIN vừa nhập.\n'
+if [[ "$CONFIGURE_GOOGLE" == "yes" ]]; then
+  printf 'Google Login đã được cấu hình trên Cloud Run.\n'
+fi
