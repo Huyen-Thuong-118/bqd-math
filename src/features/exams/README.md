@@ -16,12 +16,12 @@ Module đề thi, lượt làm bài, autosave, chấm điểm và kết quả.
 - Route kết quả hiển thị điểm, đúng/sai/bỏ trống và lời giải.
 - `admin-actions.ts` tạo đề từ hai PDF, cấu hình lịch, lớp, quyền tải/lời giải,
   phiếu chuẩn 12 trắc nghiệm + 4 đúng/sai + 6 trả lời ngắn hoặc tùy chỉnh.
-- Nút “Quét bằng Gemini” gửi PDF từ server tới model cấu hình bởi
-  `GEMINI_MODEL` (mặc định `gemini-3.1-flash-lite`) và yêu cầu structured JSON
+- Nút “Quét bằng Gemini” gửi PDF từ server tới Vertex AI bằng IAM của Cloud Run;
+  model cấu hình bởi `GEMINI_MODEL` (mặc định `gemini-3.1-flash-lite`) và yêu cầu structured JSON
   cho cấu trúc đề cùng answer key. Nếu Gemini lỗi hoặc không đọc đủ đáp án,
   hệ thống mới fallback sang worker OCR local trong `services/ocr`: PyMuPDF lấy
   text layer trước, Tesseract `vie+eng` chỉ xử lý trang scan. Giáo viên xác nhận
-  kết quả trước khi lưu; API key không bao giờ được gửi xuống trình duyệt.
+  kết quả trước khi lưu; không cần tạo hoặc lưu Gemini API key.
   Parser hỗ trợ cả bảng `1. D`/`Đáp án: D` và bảng `1) D`/`Đáp án D` trong
   các bộ PDF mẫu; `verify:slice-2` chạy regression với cả `1.pdf` đến `3.pdf`.
 - `AnswerSheet` hiển thị đề bên trái / phiếu bên phải; hỗ trợ A–D, bốn ý

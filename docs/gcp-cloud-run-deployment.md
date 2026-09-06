@@ -6,7 +6,8 @@ Kiến trúc production:
 - Cloud SQL for PostgreSQL giữ dữ liệu.
 - Cloud Storage giữ PDF/tài liệu trong bucket private.
 - Artifact Registry giữ image; Cloud Build migrate, build và deploy.
-- Secret Manager giữ mật khẩu và API key; không tạo JSON service-account key.
+- Vertex AI Gemini dùng IAM của Cloud Run, không cần Gemini API key.
+- Secret Manager giữ mật khẩu và API key Resend; không tạo JSON service-account key.
 
 ## Cách nhanh: chạy toàn bộ phần còn lại một lần
 
@@ -21,8 +22,8 @@ bash scripts/deploy-gcp-production.sh
 
 Script tự cấp IAM, tạo các khóa ngẫu nhiên còn thiếu, migration, seed ADMIN,
 build/deploy, cấu hình Auth URL, Google Login tùy chọn, CORS và Cloud Scheduler.
-Script chỉ hỏi các giá trị nó không thể tự sinh: Gemini API key, Resend API
-key/email gửi, thông tin ADMIN và Google OAuth Client ID/Secret. Nếu bước nào
+Script chỉ hỏi các giá trị nó không thể tự sinh: Resend API key/email gửi,
+thông tin ADMIN và Google OAuth Client ID/Secret. Nếu bước nào
 lỗi, script dừng ngay và có thể chạy lại an toàn; các tài nguyên/secret đã tạo
 sẽ được tái sử dụng.
 
@@ -52,6 +53,7 @@ gcloud services enable \
   secretmanager.googleapis.com \
   sqladmin.googleapis.com \
   storage.googleapis.com \
+  aiplatform.googleapis.com \
   iamcredentials.googleapis.com \
   cloudscheduler.googleapis.com
 ```
@@ -118,7 +120,6 @@ Các secret bắt buộc trong pipeline:
 
 - `db-password`
 - `auth-secret`, `next-server-actions-key`, `reset-token-secret`, `cron-secret`
-- `gemini-api-key`
 - `resend-api-key`, `email-from`
 
 Bốn khóa ngẫu nhiên phải khác nhau. Ví dụ tạo một secret ngẫu nhiên:
@@ -139,6 +140,10 @@ gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
   --member="serviceAccount:$RUNTIME_SA" \
   --role="roles/cloudsql.client"
 
+gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/aiplatform.user"
+
 gcloud storage buckets add-iam-policy-binding "gs://$GCS_BUCKET" \
   --member="serviceAccount:$RUNTIME_SA" \
   --role="roles/storage.objectAdmin"
@@ -148,7 +153,7 @@ gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
   --role="roles/iam.serviceAccountTokenCreator"
 
 for SECRET_ID in db-password auth-secret next-server-actions-key \
-  gemini-api-key resend-api-key email-from reset-token-secret cron-secret; do
+  resend-api-key email-from reset-token-secret cron-secret; do
   gcloud secrets add-iam-policy-binding "$SECRET_ID" \
     --member="serviceAccount:$RUNTIME_SA" \
     --role="roles/secretmanager.secretAccessor"

@@ -50,8 +50,8 @@ steps:
       - --max-instances=10
       - --timeout=300s
       - --execution-environment=gen2
-      - --update-env-vars=AUTH_TRUST_HOST=true,CLOUD_SQL_CONNECTION_NAME=$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},GCS_BUCKET_NAME=${_GCS_BUCKET},GEMINI_MODEL=gemini-3.1-flash-lite,DEPLOYMENT_VERSION=$BUILD_ID
-      - --update-secrets=DB_PASSWORD=db-password:latest,AUTH_SECRET=auth-secret:latest,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=next-server-actions-key:latest,GEMINI_API_KEY=gemini-api-key:latest,RESEND_API_KEY=resend-api-key:latest,EMAIL_FROM=email-from:latest,RESET_TOKEN_SECRET=reset-token-secret:latest,CRON_SECRET=cron-secret:latest
+      - --update-env-vars=AUTH_TRUST_HOST=true,CLOUD_SQL_CONNECTION_NAME=$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},GCS_BUCKET_NAME=${_GCS_BUCKET},GOOGLE_GENAI_USE_ENTERPRISE=true,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GOOGLE_CLOUD_LOCATION=global,GEMINI_MODEL=gemini-3.1-flash-lite,DEPLOYMENT_VERSION=$BUILD_ID
+      - --update-secrets=DB_PASSWORD=db-password:latest,AUTH_SECRET=auth-secret:latest,NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=next-server-actions-key:latest,RESEND_API_KEY=resend-api-key:latest,EMAIL_FROM=email-from:latest,RESET_TOKEN_SECRET=reset-token-secret:latest,CRON_SECRET=cron-secret:latest
 
 availableSecrets:
   secretManager:

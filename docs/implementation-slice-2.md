@@ -16,12 +16,12 @@ Tại `/admin/de-thi/tao-moi`, giáo viên có thể:
 - nhập answer key theo đúng loại câu để máy chấm tự động.
 
 Nút “Quét bằng Gemini” ưu tiên gửi file đề và file lời giải từ backend tới
-Gemini bằng `GEMINI_API_KEY`; model mặc định là `gemini-3.1-flash-lite` và trả
+Vertex AI bằng IAM của Cloud Run; model mặc định là `gemini-3.1-flash-lite` và trả
 structured JSON gồm cấu trúc phần thi cùng answer key. Nếu Gemini lỗi hoặc
 không trả đủ đáp án, hệ thống mới fallback sang container OCR local. Worker
 OCR ưu tiên text layer bằng PyMuPDF; chỉ trang không có text mới chạy Tesseract
-`vie+eng`. Giáo viên luôn kiểm tra kết quả trước khi tạo đề; API key chỉ tồn
-tại phía server và hệ thống không tự lưu key chấm chưa được xác nhận.
+`vie+eng`. Giáo viên luôn kiểm tra kết quả trước khi tạo đề; hệ thống không dùng
+Gemini API key và không tự lưu key chấm chưa được xác nhận.
 
 Danh sách `/admin/de-thi` hiển thị lớp, số câu, lượt làm, thời gian, link xem
 file và thao tác mở/ẩn lời giải hoặc đóng đề ngay.

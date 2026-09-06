@@ -2,7 +2,8 @@
 
 Hệ thống production dùng Cloud Run, Cloud SQL PostgreSQL, Cloud Storage private,
 Artifact Registry, Cloud Build, Secret Manager và Cloud Scheduler trong cùng
-Google Cloud project. Gemini và dịch vụ gửi email vẫn là API riêng của tính năng.
+Google Cloud project. Gemini chạy qua Vertex AI trong cùng Google Cloud project;
+dịch vụ gửi email vẫn là API riêng của tính năng.
 
 Làm theo runbook đầy đủ tại
 [`gcp-cloud-run-deployment.md`](./gcp-cloud-run-deployment.md).
@@ -24,7 +25,8 @@ Runtime dùng:
 - `GCS_BUCKET_NAME`
 - `AUTH_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `AUTH_TRUST_HOST=true`
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`
-- `GEMINI_API_KEY`, `GEMINI_MODEL`
+- `GOOGLE_GENAI_USE_ENTERPRISE=true`, `GOOGLE_CLOUD_PROJECT`,
+  `GOOGLE_CLOUD_LOCATION=global`, `GEMINI_MODEL`
 - `RESEND_API_KEY`, `EMAIL_FROM`
 - `RESET_TOKEN_SECRET`, `CRON_SECRET`
 

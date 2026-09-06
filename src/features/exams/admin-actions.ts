@@ -273,10 +273,10 @@ export async function analyzeExamPdf(formData: FormData): Promise<AnalyzeResult>
         geminiError = `Gemini chỉ nhận được ${validAnswerCount}/${expectedCount} đáp án hợp lệ.`;
       } catch (error) {
         geminiError = error instanceof Error ? error.message : "Gemini không xử lý được PDF.";
-        console.warn("Gemini thất bại, chuyển sang OCR local:", geminiError);
+        console.warn("Vertex AI Gemini thất bại, chuyển sang OCR local:", geminiError);
       }
     } else {
-      geminiError = "Chưa cấu hình GEMINI_API_KEY.";
+      geminiError = "Chưa cấu hình Vertex AI (GOOGLE_CLOUD_PROJECT).";
     }
 
     const ocrServiceUrl = process.env.OCR_SERVICE_URL?.trim();

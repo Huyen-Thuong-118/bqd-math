@@ -8,7 +8,8 @@ const required = [
   "GCS_BUCKET_NAME",
   "AUTH_SECRET",
   "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
-  "GEMINI_API_KEY",
+  "GOOGLE_CLOUD_PROJECT",
+  "GOOGLE_CLOUD_LOCATION",
   "RESEND_API_KEY",
   "EMAIL_FROM",
   "RESET_TOKEN_SECRET",
@@ -35,6 +36,10 @@ if (!appUrl) {
 
 if (process.env.AUTH_TRUST_HOST !== "true") {
   errors.push("AUTH_TRUST_HOST phải là true khi chạy sau Cloud Run proxy");
+}
+
+if (process.env.GOOGLE_GENAI_USE_ENTERPRISE !== "true") {
+  errors.push("GOOGLE_GENAI_USE_ENTERPRISE phải là true để dùng Vertex AI");
 }
 
 const serverActionsKey = process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY?.trim();

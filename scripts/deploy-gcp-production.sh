@@ -135,6 +135,7 @@ gcloud services enable \
   secretmanager.googleapis.com \
   sqladmin.googleapis.com \
   storage.googleapis.com \
+  aiplatform.googleapis.com \
   iamcredentials.googleapis.com \
   cloudscheduler.googleapis.com \
   --project="$GCP_PROJECT_ID"
@@ -145,7 +146,6 @@ create_random_secret_if_missing next-server-actions-key
 create_random_secret_if_missing reset-token-secret
 create_random_secret_if_missing cron-secret
 
-prompt_secret_if_missing gemini-api-key "Dán Gemini API key"
 prompt_secret_if_missing resend-api-key "Dán Resend API key"
 prompt_text_if_missing email-from "Email gửi OTP, ví dụ BQD Math <noreply@tenmien.vn>"
 
@@ -176,6 +176,10 @@ gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
   --member="serviceAccount:$RUNTIME_SA" \
   --role="roles/cloudsql.client" >/dev/null
 
+gcloud projects add-iam-policy-binding "$GCP_PROJECT_ID" \
+  --member="serviceAccount:$RUNTIME_SA" \
+  --role="roles/aiplatform.user" >/dev/null
+
 gcloud storage buckets add-iam-policy-binding "gs://$GCS_BUCKET" \
   --member="serviceAccount:$RUNTIME_SA" \
   --role="roles/storage.objectAdmin" >/dev/null
@@ -203,7 +207,6 @@ RUNTIME_SECRETS=(
   db-password
   auth-secret
   next-server-actions-key
-  gemini-api-key
   resend-api-key
   email-from
   reset-token-secret

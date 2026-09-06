@@ -1,7 +1,9 @@
 import "server-only";
 
-const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+import { GoogleGenAI, type Part } from "@google/genai";
+
 const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
+const DEFAULT_VERTEX_LOCATION = "global";
 
 type GeminiSection = {
   label: string;
@@ -13,13 +15,6 @@ export type GeminiExamAnalysis = {
   sections: GeminiSection[];
   pageCount: number;
   answerKey: string[];
-};
-
-type GeminiResponse = {
-  candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
-  }>;
-  error?: { message?: string };
 };
 
 const responseSchema = {
@@ -115,15 +110,28 @@ function parseGeminiResult(raw: unknown): GeminiExamAnalysis {
 }
 
 export function hasGeminiConfig() {
-  return Boolean(process.env.GEMINI_API_KEY?.trim());
+  return Boolean(
+    process.env.GOOGLE_CLOUD_PROJECT?.trim() ||
+    process.env.GCP_PROJECT_ID?.trim() ||
+    process.env.GCLOUD_PROJECT?.trim(),
+  );
 }
 
 export async function analyzeExamPdfsWithGemini(
   examPdf: Buffer,
   answerPdf?: Buffer,
 ): Promise<GeminiExamAnalysis> {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) throw new Error("Chưa cấu hình GEMINI_API_KEY.");
+  const project = (
+    process.env.GOOGLE_CLOUD_PROJECT?.trim() ||
+    process.env.GCP_PROJECT_ID?.trim() ||
+    process.env.GCLOUD_PROJECT?.trim()
+  );
+  if (!project) throw new Error("Chưa cấu hình GOOGLE_CLOUD_PROJECT cho Vertex AI.");
+
+  const location = process.env.GOOGLE_CLOUD_LOCATION?.trim() || DEFAULT_VERTEX_LOCATION;
+  if (!/^[a-z0-9-]+$/.test(location)) {
+    throw new Error("GOOGLE_CLOUD_LOCATION không hợp lệ.");
+  }
 
   const model = (process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL)
     .replace(/^models\//, "");
@@ -142,7 +150,7 @@ Không suy đoán từ nội dung đề. Nếu file lời giải không nêu đ�
 Phân loại câu chọn A/B/C/D là MULTIPLE_CHOICE, câu có 4 ý đúng/sai là TRUE_FALSE, câu cần nhập số/kết quả là SHORT_ANSWER.
 Không có file lời giải nên answerKey phải là mảng rỗng.`;
 
-  const parts: Array<Record<string, unknown>> = [
+  const parts: Part[] = [
     { text: instruction },
     { text: "FILE 1 — ĐỀ THI:" },
     { inlineData: { mimeType: "application/pdf", data: examPdf.toString("base64") } },
@@ -154,30 +162,24 @@ Không có file lời giải nên answerKey phải là mảng rỗng.`;
     );
   }
 
-  const response = await fetch(`${GEMINI_API_BASE}/${model}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts }],
-      generationConfig: {
-        temperature: 0,
-        responseMimeType: "application/json",
-        responseJsonSchema: responseSchema,
-      },
-    }),
-    signal: AbortSignal.timeout(180_000),
+  const ai = new GoogleGenAI({
+    enterprise: true,
+    project,
+    location,
+    apiVersion: "v1",
   });
-  const payload = (await response.json().catch(() => null)) as GeminiResponse | null;
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || `Gemini API trả lỗi HTTP ${response.status}.`);
-  }
-  const responseText = payload?.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text ?? "")
-    .join("")
-    .trim();
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [{ role: "user", parts }],
+    config: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseJsonSchema: responseSchema,
+      httpOptions: { timeout: 180_000 },
+    },
+  });
+  const responseText = response.text?.trim();
   if (!responseText) throw new Error("Gemini không trả về nội dung.");
 
   try {
