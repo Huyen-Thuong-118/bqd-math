@@ -9,6 +9,7 @@ steps:
   - id: download-cloud-sql-auth-proxy
     name: gcr.io/cloud-builders/wget
     args:
+      - -q
       - -O
       - /workspace/cloud-sql-proxy
       - https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v${_CLOUD_SQL_PROXY_VERSION}/cloud-sql-proxy.linux.amd64
@@ -30,6 +31,9 @@ steps:
     args:
       - -ceu
       - |
+        apt-get update
+        apt-get install --yes --no-install-recommends ca-certificates openssl
+        rm -rf /var/lib/apt/lists/*
         chmod +x /workspace/cloud-sql-proxy
         /workspace/cloud-sql-proxy "$PROJECT_ID:${_REGION}:${_CLOUD_SQL_INSTANCE}" --port 5432 &
         sleep 3
