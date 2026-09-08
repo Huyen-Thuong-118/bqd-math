@@ -1,224 +1,214 @@
 # BQD Math
 
-Hệ thống ôn luyện & thi thử Toán học — quản lý lớp học, đề thi, câu hỏi ôn
-tập theo chương, phòng thi thử có chấm điểm.
+Ứng dụng ôn luyện và thi thử Toán: quản lý lớp, học sinh, tài liệu, ngân hàng câu hỏi và đề thi.
 
-🔗 Domain dự kiến: `bqdmath.edu.vn`
+## Chạy trên Windows — bắt đầu ở đây
 
-## Tech stack
+Dùng **PowerShell** hoặc terminal PowerShell trong VS Code cho toàn bộ lệnh bên dưới. Chạy lần lượt từng bước; nếu có lỗi thì xử lý trước khi sang bước tiếp theo.
 
-- **Next.js 16** (App Router, TypeScript, Turbopack)
-- **Tailwind CSS v4** — theme màu Navy/Pastel, cấu hình bằng CSS (`src/app/globals.css`)
-- **Prisma + PostgreSQL** — database
-- **NextAuth (Auth.js v5)** — đăng nhập Credentials + Google, phân quyền Admin/Student (`src/auth.ts`)
-- Font: **Comfortaa**
+### 1. Cài công cụ (chỉ lần đầu)
 
-## Cấu trúc thư mục
+| Công cụ | Cần cài |
+| --- | --- |
+| [Git for Windows](https://git-scm.com/install/windows) | Để clone/pull code từ GitHub |
+| [Node.js](https://nodejs.org/en/download) | Chọn **22.x, từ 22.12 trở lên**, bản Windows Installer; npm đi kèm |
+| [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) | Dùng WSL 2 backend và Linux containers để chạy PostgreSQL + OCR |
 
-Xem chi tiết logic tổ chức trong [`docs/architecture.md`](./docs/architecture.md).
-Xem phạm vi sản phẩm và roadmap trong
-[`docs/product-blueprint.md`](./docs/product-blueprint.md).
-Backlog implementation có thể giao theo từng task cho agent nằm tại
-[`docs/implementation-agent-backlog.md`](./docs/implementation-agent-backlog.md).
-Xem phần đã triển khai cho lát cắt 0 trong
-[`docs/implementation-slice-0.md`](./docs/implementation-slice-0.md).
-Luồng làm bài end-to-end nằm tại
-[`docs/implementation-slice-1.md`](./docs/implementation-slice-1.md).
-Upload PDF và phiếu tô nằm tại
-[`docs/implementation-slice-2.md`](./docs/implementation-slice-2.md).
-Xem checklist bảo mật trong [`docs/security.md`](./docs/security.md) trước khi public.
-Deploy production lên Google Cloud Run theo
-[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).
+Nếu Docker yêu cầu WSL, làm theo hướng dẫn trong trình cài đặt và khởi động lại máy khi được yêu cầu. Không cần cài PostgreSQL, Python hay Tesseract riêng.
 
-```
-src/
-├── app/          # CHỈ routing + layout — không chứa business logic
-├── features/     # Logic nghiệp vụ, chia theo domain (auth, classes, exams...)
-├── components/   # UI dùng chung (ui/, layout/)
-├── lib/          # Tiện ích kỹ thuật (db, auth config, helpers)
-└── types/        # Type dùng chung toàn app
-docs/              # Kiến trúc, bảo mật và tài liệu kỹ thuật
-infra/             # Dịch vụ local (Docker Compose)
-prisma/            # Schema, migration và seed database
-public/            # File tĩnh
+Cài xong, **đóng rồi mở lại PowerShell**, mở **Docker Desktop** và chờ engine chạy. Kiểm tra:
+
+```powershell
+git --version
+node --version
+npm.cmd --version
+docker compose version
+docker info
 ```
 
-Mỗi thư mục trong `features/` có 1 file `README.md` ngắn giải thích phạm vi —
-mở thư mục nào là biết ngay thư mục đó làm gì.
+README dùng `npm.cmd` để tránh lỗi PowerShell chặn `npm.ps1`; không cần đổi Execution Policy.
 
-## Bắt đầu chạy project
+### 2. Lấy code về máy
 
-### Chạy nhanh local
+Mở PowerShell tại thư mục muốn chứa dự án rồi chạy:
 
-Sau khi mở Docker Desktop, chạy một lệnh để tự tạo `.env` (nếu chưa có),
-cài dependencies, khởi động PostgreSQL + OCR, áp dụng migration và chạy app:
+```powershell
+git clone https://github.com/Huyen-Thuong-118/bqd-math.git
+cd bqd-math
+```
+
+Nếu repo riêng tư, tài khoản GitHub của bạn cần được cấp quyền truy cập. Nếu đã clone rồi, mở thư mục đó và dùng `git pull`.
+
+**Từ đây, chạy mọi lệnh trong thư mục có `package.json`.** Không copy `node_modules`, `.next` hoặc `.env` từ máy khác.
+
+### 3. Tạo cấu hình local (chỉ lần đầu)
+
+Copy nguyên khối dưới đây vào PowerShell. Lệnh tạo `.env` từ mẫu và tự sinh secret bằng Node.js; nếu `.env` đã tồn tại thì giữ nguyên.
+
+```powershell
+@'
+const fs = require('node:fs');
+const crypto = require('node:crypto');
+const path = require('node:path');
+const os = require('node:os');
+if (fs.existsSync('.env')) {
+  console.log('Da co .env, giu nguyen cau hinh.');
+} else {
+  let env = fs.readFileSync('.env.example', 'utf8');
+  const authSecret = crypto.randomBytes(32).toString('base64');
+  for (const key of ['AUTH_SECRET', 'NEXTAUTH_SECRET', 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY', 'RESET_TOKEN_SECRET', 'CRON_SECRET']) {
+    const value = key === 'AUTH_SECRET' || key === 'NEXTAUTH_SECRET' ? authSecret : crypto.randomBytes(32).toString('base64');
+    env = env.replace(new RegExp('^' + key + '=.*$', 'm'), key + '=' + value);
+  }
+  const gcloudDir = path.join(os.homedir(), '.config', 'gcloud');
+  fs.mkdirSync(gcloudDir, { recursive: true });
+  env += '\nBQDMATH_GCLOUD_CONFIG_DIR=' + JSON.stringify(gcloudDir.replaceAll('\\', '/')) + '\n';
+  fs.writeFileSync('.env', env);
+  console.log('Da tao .env va secret local.');
+}
+'@ | node
+```
+
+Giữ cấu hình database/local có sẵn trong `.env.example`. Thư mục `gcloud` rỗng được tạo để Docker mount được trên Windows; bước này không cần đăng nhập Google.
+
+**Tạo `.env` trước khi cài dependencies** vì Prisma đọc cấu hình ngay trong bước cài đặt. File `.env` đã được Git bỏ qua, không commit file này.
+
+### 4. Cài và khởi động
+
+Chạy **từng dòng**, chỉ sang dòng kế tiếp khi dòng trước thành công:
+
+```powershell
+npm.cmd ci
+npm.cmd run db:up
+npm.cmd run db:migrate:deploy
+npm.cmd run seed
+npm.cmd run dev
+```
+
+Lần đầu Docker cần tải và build OCR nên có thể mất vài phút. Khi terminal báo server đã sẵn sàng, mở **[http://localhost:3000](http://localhost:3000)**. Giữ terminal đang chạy để sử dụng app.
+
+Đăng nhập tại [http://localhost:3000/dang-nhap](http://localhost:3000/dang-nhap):
+
+| Trường | Giá trị local mặc định |
+| --- | --- |
+| Tài khoản (email) | `admin@bqdmath.local` |
+| Mật khẩu | `BqdMathDev123!` |
+
+Email và mật khẩu lấy từ `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` trong `.env`. Đây là tài khoản thử nghiệm trên máy cá nhân. Muốn đổi thông tin, sửa nhóm `SEED_ADMIN_*` rồi chạy lại `npm.cmd run seed`; lệnh seed cũng đặt lại mật khẩu admin theo cấu hình đó.
+
+### 5. Những lần chạy sau
+
+Mở Docker Desktop, mở PowerShell trong thư mục dự án, chạy:
+
+```powershell
+npm.cmd run db:up
+npm.cmd run dev
+```
+
+Dừng app bằng **Ctrl+C**. Muốn dừng cả database và OCR:
+
+```powershell
+npm.cmd run db:stop
+```
+
+Dữ liệu vẫn được giữ khi dừng dịch vụ hoặc khởi động lại máy.
+
+### 6. Cập nhật code mới từ GitHub
+
+Dừng dev server bằng **Ctrl+C**, mở Docker Desktop, rồi chạy từng dòng:
+
+```powershell
+git pull
+npm.cmd ci
+npm.cmd run db:up -- --build
+npm.cmd run db:migrate:deploy
+npm.cmd run dev
+```
+
+`npm ci` cài đúng phiên bản trong lockfile và sinh lại Prisma Client. `--build` cập nhật OCR nếu code dịch vụ thay đổi. `db:migrate:deploy` áp dụng migration đã có trong repo; không dùng `db:migrate` cho thao tác cập nhật thông thường.
+
+Không cần seed lại mỗi lần pull. Nếu `.env.example` có biến mới, bổ sung biến đó vào `.env`, giữ secret và cấu hình hiện tại. Nếu `git pull` báo xung đột với thay đổi của bạn, lưu/commit thay đổi trước khi pull lại.
+
+## Dữ liệu và tính năng tùy chọn
+
+- Mỗi máy có database riêng trong Docker volume. `git pull` chỉ lấy code, không lấy tài khoản, lớp hay đề thi từ máy khác.
+- PDF upload nằm ở `storage/uploads/`; database nằm trong Docker volume. Dừng container vẫn giữ dữ liệu; không chạy `docker compose down -v` nếu muốn giữ database.
+- Cấu hình mẫu dùng database và file local. Không dùng `.env` production để chạy thử trên máy khác.
+- Đăng nhập admin và OCR local không cần API key. Google login, gửi email, video Cloudflare và Vertex AI cần cấu hình dịch vụ tương ứng.
+
+### Thêm dữ liệu demo
+
+Sửa `.env` thành `SEED_DEMO_DATA="true"`, sau đó chạy:
+
+```powershell
+npm.cmd run seed
+```
+
+Lệnh tạo một học sinh, một lớp và một đề 10 câu. Học sinh mặc định đăng nhập bằng `0911111111`, mật khẩu `BqdMathStudent123!`. Sau khi tạo xong, có thể đặt lại `SEED_DEMO_DATA="false"` để các lần seed sau chỉ cập nhật admin.
+
+### Google login và Vertex AI
+
+Để bật Google login, điền `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` trong `.env`. OAuth client loại Web application dùng origin `http://localhost:3000` và redirect URI `http://localhost:3000/api/auth/callback/google`. Khởi động lại app sau khi sửa `.env`; xem thêm [tài liệu xác thực](docs/implementation-slice-0.md).
+
+Vertex AI là tùy chọn, cần quyền truy cập Google Cloud project, billing và Application Default Credentials (ADC). Script `setup:local:vertex` hiện viết bằng Bash. Hướng dẫn Windows phía trên chỉ thiết lập OCR local; xem [tài liệu Google Cloud](docs/gcp-cloud-run-deployment.md) khi cần cấu hình AI nâng cao.
+
+## Lỗi thường gặp trên Windows
+
+| Lỗi | Cách xử lý |
+| --- | --- |
+| `npm.ps1 cannot be loaded` / `running scripts is disabled` | Dùng `npm.cmd` như hướng dẫn ở trên. |
+| Không nhận `git`, `node`, `npm.cmd` hoặc `docker` | Cài công cụ tương ứng rồi mở lại terminal; kiểm tra bước 1. |
+| Không kết nối được Docker / lỗi named pipe | Mở Docker Desktop, chờ engine chạy rồi thử `docker info`. |
+| Docker báo thiếu WSL/virtualization | Làm theo [hướng dẫn Windows của Docker](https://docs.docker.com/desktop/setup/install/windows-install/), bật virtualization nếu được yêu cầu và restart máy. |
+| `bash`, `nc`, `perl` hoặc `openssl` không tồn tại | Bạn đang dùng script `npm run local` dành cho môi trường Bash. Trên Windows dùng các bước PowerShell phía trên. |
+| Thiếu `DIRECT_URL` hoặc `AUTH_SECRET` | Kiểm tra có `.env` trong thư mục `package.json` và đã chạy bước 3. Bước 3 không sửa `.env` cũ. |
+| Docker báo đường dẫn mount `gcloud` không hợp lệ | Kiểm tra `BQDMATH_GCLOUD_CONFIG_DIR` trong `.env` trỏ tới thư mục có thật, dùng dấu `/`, ví dụ `"C:/Users/YourName/.config/gcloud"`. |
+| Cổng `5432` hoặc `8001` đã được sử dụng | Dừng PostgreSQL/OCR hoặc container khác đang chiếm cổng, rồi chạy lại `npm.cmd run db:up`. |
+| Prisma `P1001` / không kết nối được database | Chạy `npm.cmd run db:up`, kiểm tra Docker và hai URL database trong `.env.example`. |
+| Prisma báo thiếu bảng/cột | Sau khi pull, chạy `npm.cmd ci` rồi `npm.cmd run db:migrate:deploy`. |
+| Sai mật khẩu admin | Kiểm tra `SEED_ADMIN_*` trong `.env`, chạy `npm.cmd run seed` rồi đăng nhập lại. |
+| App tự chuyển sang cổng `3001` | Dừng app đang chiếm cổng `3000` rồi chạy lại để khớp URL xác thực local. |
+
+Xem trạng thái và log dịch vụ khi cần:
+
+```powershell
+docker compose -f infra/docker-compose.yml --project-directory . ps
+docker compose -f infra/docker-compose.yml --project-directory . logs --tail 100 postgres ocr
+```
+
+## macOS / Linux
+
+Script tự động hiện có cần Node.js, Docker, Bash, `curl`, `nc`, `openssl` và `perl`. Mở Docker trước rồi chạy:
 
 ```bash
 npm run local
 ```
 
-Mở [http://localhost:3000](http://localhost:3000). Nhấn `Ctrl+C` để dừng
-dev server; PostgreSQL và OCR tiếp tục chạy để lần khởi động sau nhanh hơn.
+Script tạo `.env` nếu chưa có, cài dependencies nếu chưa có `node_modules`, khởi động dịch vụ và áp dụng migration. Nó luôn dùng database và lưu trữ local. Khi cần tài khoản admin, mở terminal thứ hai trong dự án và chạy `npm run seed` với cấu hình local. Sau khi pull có thay đổi dependencies, chạy `npm ci` trước khi chạy lại script.
 
-Lệnh này luôn dùng PostgreSQL Docker và `storage/uploads/` trên máy hiện tại,
-kể cả khi `.env` có cấu hình GCP. Vì vậy thao tác thử nghiệm local không sửa
-Cloud SQL hoặc file trên Cloud Storage production.
+## Công nghệ và tài liệu phát triển
 
-### Dùng Vertex AI khi chạy local (tùy chọn)
+Next.js 16 / React 19 / TypeScript / Tailwind CSS 4 / Prisma 7 / PostgreSQL 16 / Auth.js v5. OCR chạy trong Docker với Python, PyMuPDF và Tesseract.
 
-Vertex AI chạy được ở local bằng Application Default Credentials (ADC), không
-cần tạo hoặc tải service-account JSON key. Sau khi cài Google Cloud CLI, chạy:
-
-```bash
-npm run setup:local:vertex
-npm run local
-```
-
-Tài khoản Google đang đăng nhập phải có role `Vertex AI User`
-(`roles/aiplatform.user`) trên project `bqd-math-507809`, và project phải được
-liên kết với một tài khoản Cloud Billing đang hoạt động. Nếu chưa cấu hình ADC,
-chưa bật billing hoặc Vertex AI tạm lỗi, tính năng quét đề sẽ fallback sang OCR
-local.
-
-### Dữ liệu sau khi deploy GCP
-
-Cloud Run chỉ chạy container ứng dụng. Dữ liệu nghiệp vụ nằm trong Cloud SQL,
-còn PDF/tài liệu nằm trong Cloud Storage, nên các lần deploy sau vẫn giữ nguyên
-dữ liệu. Pipeline production chỉ chạy migration rồi thay revision Cloud Run;
-không reset database và không xóa bucket.
-
-Local và production cố ý dùng hai bộ dữ liệu riêng. Không nên trỏ máy local
-vào database/bucket production vì seed, migration thử nghiệm hoặc thao tác trên
-UI local có thể thay đổi dữ liệu thật. Khi cần môi trường online dùng chung để
-kiểm thử, hãy tạo Cloud SQL database và bucket staging riêng.
-
-### 1. Tạo file môi trường
-
-```bash
-cp .env.example .env
-```
-
-Prisma đọc `DIRECT_URL` ngay trong bước `postinstall`, vì vậy cần tạo và điền
-`.env` trước khi cài dependencies.
-
-### 2. Chọn database
-
-#### Phát triển độc lập bằng Docker (khuyến nghị cho local)
-
-Repo có sẵn PostgreSQL 16 trong `infra/docker-compose.yml`. Dùng script npm
-để không phải nhớ đường dẫn file hạ tầng:
-
-```bash
-npm run db:up
-```
-
-Với local, dùng cùng một URL cho cả app và Prisma CLI:
-
-```env
-DATABASE_URL="postgresql://bqdmath:bqdmath_dev@127.0.0.1:5432/bqdmath"
-DIRECT_URL="postgresql://bqdmath:bqdmath_dev@127.0.0.1:5432/bqdmath"
-```
-
-Database và volume này chỉ nằm trên máy hiện tại; cổng PostgreSQL chỉ bind
-vào `127.0.0.1`, không mở ra LAN/Internet.
-
-Lệnh này cũng khởi động OCR local ở `127.0.0.1:8001` (PyMuPDF + Tesseract
-`vie+eng`). Không cần API key; dữ liệu PDF không rời máy.
-
-#### Production trên Google Cloud
-
-Production dùng Cloud Run + Cloud SQL + Cloud Storage. Cloud Run truy cập bằng
-service account nên không cần JSON key. Xem
-[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).
-
-### 3. Cài dependencies
-
-```bash
-npm install
-```
-
-### 4. Khởi tạo database
-
-```bash
-npm run db:migrate
-```
-
-Lệnh này tạo bảng trong DB theo `prisma/schema.prisma` + tự chạy
-`prisma generate` (sinh Prisma Client có type an toàn).
-
-#### Vì sao có `prisma.config.ts`?
-
-Prisma 7 (bản đang dùng trong project) đổi cách cấu hình: không cho khai
-báo connection string trong `schema.prisma` nữa. Giờ tách làm 2 nơi:
-
-| File | Dùng khi nào | Đọc biến nào |
-|------|-------------|--------------|
-| `prisma.config.ts` (gốc repo) | Prisma CLI chạy (`migrate`, `studio`) | Local dùng `DIRECT_URL`; Cloud Build dùng Cloud SQL Auth Proxy |
-| `src/lib/db.ts` | App chạy thật (mọi query trong code) | Local dùng `DATABASE_URL`; Cloud Run dùng Unix socket Cloud SQL |
-
-Nếu quên điền 1 trong 2 biến ở `.env`, sẽ gặp lỗi rõ ràng ngay khi chạy
-lệnh tương ứng — điền đủ cả 2 trước khi chạy bước 3.
-
-### 5. Tạo tài khoản admin local (tuỳ chọn)
-
-Điền `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PHONE`, `SEED_ADMIN_PASSWORD` trong
-`.env`, sau đó chạy:
-
-```bash
-npm run seed
-```
-
-### 6. Chạy dev server
-
-```bash
-npm run dev
-```
-
-Mở [http://localhost:3000](http://localhost:3000).
-
-### 7. Bật đăng nhập Google (tuỳ chọn)
-
-Tạo Google OAuth Client loại **Web application**, thêm origin
-`http://localhost:3000` và redirect URI
-`http://localhost:3000/api/auth/callback/google`, rồi điền
-`GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` trong `.env`. Khởi động lại dev
-server sau khi đổi biến môi trường. Xem đầy đủ luồng và checklist kiểm thử tại
-[`docs/implementation-slice-0.md`](./docs/implementation-slice-0.md).
-
-### Các lệnh hữu ích khác
+| Thư mục | Nội dung |
+| --- | --- |
+| `src/app/` | Routing, layout và API routes |
+| `src/features/` | Logic nghiệp vụ theo tính năng |
+| `src/components/` | UI dùng chung |
+| `src/lib/` | Database, auth, lưu trữ và tiện ích |
+| `prisma/` | Schema, migrations, seed |
+| `services/ocr/` | Dịch vụ OCR và nhập câu hỏi |
+| `infra/` | Docker Compose local |
+| `docs/` | Tài liệu kỹ thuật |
 
 | Lệnh | Mục đích |
-|------|----------|
-| `npm run db:studio` | Mở Prisma Studio — xem/sửa data trực quan như Excel |
-| `npm run lint` | Kiểm tra lỗi code style |
-| `npm run build` | Build production (kiểm tra lỗi trước khi deploy) |
-| `npm run verify:slice-0` | Kiểm tra tự động auth/trạng thái trên DB local (cần dev server) |
-| `npm run verify:slice-1` | Kiểm tra ownership, autosave, chấm điểm và kết quả (cần seed + dev server) |
-| `npm run verify:slice-2` | Kiểm tra quyền PDF, download và lời giải (cần dev server) |
-| `npm run verify:change-password` | Kiểm tra đổi mật khẩu cũ/mới và chặn tài khoản bị khóa |
-| `npm run verify:backlog` | Kiểm tra filter, mã quản lý, metric tiến độ và invariant dữ liệu mới |
-| `npm run seed:samples` | Import cặp PDF số 1 trong `data/` thành đề mẫu 12–4–6 |
+| --- | --- |
+| `npm.cmd run db:studio` | Xem/sửa dữ liệu local bằng Prisma Studio |
+| `npm.cmd run db:migrate` | Dành cho người sửa schema: tạo migration mới |
+| `npm.cmd run lint` | Kiểm tra code bằng ESLint |
+| `npm.cmd run build` | Build production để kiểm tra trước khi deploy |
+| `npm.cmd run seed:samples` | Import đề mẫu, cần các PDF tương ứng trong `data/` |
 
-## Bước tiếp theo (chưa làm trong lần setup này)
-
-- [x] Connection pooling cho Prisma (`directUrl` trong schema + hướng dẫn `.env`)
-- [x] Client lưu trữ Cloud Storage (`lib/storage.ts`) + Cloudflare Stream tùy chọn (`lib/stream.ts`)
-- [x] Cơ chế batch-save đáp án chống nghẽn DB (`features/exams/hooks/useAnswerBuffer.ts`)
-- [x] Mật khẩu hash 1 chiều, admin không xem lại được (`lib/password.ts`) — xem `docs/security.md`
-- [x] Session + ownership + deadline cho API route autosave đáp án
-- [x] Cài & cấu hình NextAuth trong `src/auth.ts` — Credentials + Google, session JWT, gate route ở `src/proxy.ts`
-- [ ] Chạy `npx shadcn@latest init` để thêm UI components vào `components/ui/`
-- [x] `PdfViewer.tsx` — render PDF canvas qua API có kiểm tra quyền, zoom và watermark
-- [x] UI làm 10 câu + `ExamTimer` + autosave/reload + nộp/chấm/kết quả
-- [ ] Viết logic thật trong các `features/*/actions.ts` và `queries.ts` còn lại
-- [ ] Load test 500 concurrent bằng k6 trước khi dùng thi thật
-- [x] Chuẩn bị Docker/Cloud Build để deploy lên Google Cloud Run
-
-## Deploy production
-
-Không deploy bản dùng thật chỉ bằng cách import repo rồi bấm Deploy. Production
-cần Cloud SQL có backup, Cloud Storage private, email domain thật, secret riêng, migration
-và smoke test hai vai trò. Làm theo runbook đầy đủ tại
-[`docs/production-deployment.md`](./docs/production-deployment.md).
-Các bước tạo GCP project, Secret Manager, migration, deploy và scheduler nằm tại
-[`docs/gcp-cloud-run-deployment.md`](./docs/gcp-cloud-run-deployment.md).
+- [Kiến trúc](docs/architecture.md) · [Phạm vi sản phẩm](docs/product-blueprint.md) · [Backlog](docs/implementation-agent-backlog.md)
+- [Xác thực](docs/implementation-slice-0.md) · [Luồng thi và chấm điểm](docs/implementation-slice-1.md) · [Upload PDF](docs/implementation-slice-2.md)
+- [Bảo mật](docs/security.md) · [Checklist production](docs/production-deployment.md) · [Deploy Google Cloud Run](docs/gcp-cloud-run-deployment.md)
