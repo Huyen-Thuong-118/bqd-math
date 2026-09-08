@@ -7,6 +7,7 @@ import { gradeExam } from "../src/features/exams/grading";
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/password";
 import { buildExamDocumentKey, deleteDocument, uploadDocument } from "../src/lib/storage";
+import { requireTestDatabase } from "./test-database-guard";
 
 const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
@@ -30,6 +31,7 @@ async function signIn(identifier: string, password: string) {
 }
 
 async function main() {
+  requireTestDatabase();
   const partialTrueFalse = gradeExam(
     [{ id: "tf", number: 1, type: "TRUE_FALSE", correctAnswer: "D,D,S,S", points: 1 }],
     new Map([[1, "D,D,S,D"]]),

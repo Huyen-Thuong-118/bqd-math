@@ -5,12 +5,14 @@ import { randomUUID } from "node:crypto";
 import { changePasswordForUser } from "../src/features/auth/change-password-service";
 import { db } from "../src/lib/db";
 import { hashPassword, verifyPassword } from "../src/lib/password";
+import { requireTestDatabase } from "./test-database-guard";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function main() {
+  requireTestDatabase();
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
   const oldPassword = "OldPassword123!";
   const newPassword = "NewPassword456!";

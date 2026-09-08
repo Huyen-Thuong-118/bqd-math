@@ -14,6 +14,7 @@ import {
   isValidClassCode,
   normalizeClassCode,
 } from "../src/lib/management-codes";
+import { requireTestDatabase } from "./test-database-guard";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -32,6 +33,7 @@ function assertDensePositions(
 }
 
 async function main() {
+  requireTestDatabase();
   const studentCode = generateStudentCode();
   assert(/^HS-[A-F0-9]{8}$/.test(studentCode), "Mã học sinh sinh ra sai định dạng.");
   assert(normalizeClassCode(" 12a1 - 2026 ") === "12A1-2026", "Normalize mã lớp chưa đúng.");

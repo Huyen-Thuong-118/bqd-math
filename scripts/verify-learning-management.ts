@@ -4,12 +4,14 @@ import { randomUUID } from "node:crypto";
 import { saveAnswerBatchForUser } from "../src/features/exams/repository";
 import { submitAttemptForUser } from "../src/features/exams/service";
 import { db } from "../src/lib/db";
+import { requireTestDatabase } from "./test-database-guard";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
 async function main() {
+  requireTestDatabase();
   const suffix = randomUUID().slice(0, 8);
   const ids = { user: `verify-user-${suffix}`, class: `verify-class-${suffix}`, document: `verify-doc-${suffix}`, chapter: `verify-chapter-${suffix}`, question: `verify-review-${suffix}`, exam: `verify-exam-${suffix}` };
   try {

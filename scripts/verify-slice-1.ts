@@ -9,6 +9,7 @@ import {
 } from "../src/features/exams/service";
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/password";
+import { requireTestDatabase } from "./test-database-guard";
 
 const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 const demoEmail = process.env.SEED_STUDENT_EMAIL ?? "student@bqdmath.local";
@@ -61,6 +62,7 @@ async function postAnswers(cookie: string, attemptId: string) {
 }
 
 async function main() {
+  requireTestDatabase();
   const unitGrade = gradeExam(
     [
       { id: "q1", number: 1, correctAnswer: "B", points: 1 },

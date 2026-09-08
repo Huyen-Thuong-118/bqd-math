@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "../src/lib/db";
 import { hashPassword } from "../src/lib/password";
+import { requireTestDatabase } from "./test-database-guard";
 
 const baseUrl = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 const password = "SliceZero123!";
@@ -58,6 +59,7 @@ async function expectRedirect(cookie: string, path: string, location: string) {
 }
 
 async function main() {
+  requireTestDatabase();
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
   const email = `slice0-${suffix}@example.test`;
   const phoneSuffix = String(Date.now()).slice(-8);
