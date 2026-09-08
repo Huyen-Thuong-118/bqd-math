@@ -410,6 +410,11 @@ enum ExamStatus {
   CLOSED
 }
 
+enum AttemptSubmissionReason {
+  SUBMITTED
+  AUTO_SUBMITTED
+}
+
 model ExamAttempt {
   id      String   @id @default(cuid())
   examId  String
@@ -425,6 +430,7 @@ model ExamAttempt {
   startedAt   DateTime  @default(now())
   expiresAt   DateTime?
   submittedAt DateTime?
+  submissionReason AttemptSubmissionReason?
 
   correctCount    Int?
   incorrectCount  Int?
@@ -460,13 +466,15 @@ model AttemptAnswer {
 // Sort khi hiển thị: theo questionNumber -> changedAt.
 model AnswerHistory {
   id             String      @id @default(cuid())
+  eventId        String      @unique
   attemptId      String
   attempt        ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   questionNumber Int
-  selectedAnswer String
+  selectedAnswer String?
   changedAt      DateTime    @default(now())
+  receivedAt     DateTime    @default(now())
 
-  @@index([attemptId, questionNumber])
+  @@index([attemptId, questionNumber, changedAt])
 }
 
 // ---------------- CÂU HỎI ÔN TẬP ----------------

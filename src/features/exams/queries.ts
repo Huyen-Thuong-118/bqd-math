@@ -113,7 +113,7 @@ export async function getTakingAttempt(
         },
       },
       answers: {
-        select: { questionNumber: true, selectedAnswer: true, changedAt: true },
+        select: { eventId: true, questionNumber: true, selectedAnswer: true, changedAt: true },
         orderBy: [{ changedAt: "asc" }, { id: "asc" }],
       },
       finalizedAnswers: {
@@ -128,8 +128,10 @@ export async function getTakingAttempt(
   const initialAnswers: Record<number, string> = {};
   const initialHistory: AnswerChange[] = [];
   for (const answer of attempt.answers) {
-    initialAnswers[answer.questionNumber] = answer.selectedAnswer;
+    if (answer.selectedAnswer) initialAnswers[answer.questionNumber] = answer.selectedAnswer;
+    else delete initialAnswers[answer.questionNumber];
     initialHistory.push({
+      eventId: answer.eventId,
       questionNumber: answer.questionNumber,
       selectedAnswer: answer.selectedAnswer,
       changedAt: answer.changedAt.toISOString(),

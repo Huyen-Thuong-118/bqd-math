@@ -3,8 +3,9 @@ export type ExamQuestionType = "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER"
 
 /** 1 lần đổi đáp án — đơn vị nhỏ nhất được lưu trong lịch sử. */
 export type AnswerChange = {
+  eventId: string;
   questionNumber: number;
-  selectedAnswer: string;
+  selectedAnswer: string | null;
   changedAt: string; // ISO string — set ở CLIENT lúc bấm chọn, không phải lúc gửi lên server
 };
 

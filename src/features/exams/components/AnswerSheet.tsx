@@ -33,7 +33,7 @@ export function AnswerSheet({ questions, answers, disabled, onAnswer, marked = n
   questions: TakingQuestion[];
   answers: Record<number, string>;
   disabled: boolean;
-  onAnswer: (questionNumber: number, answer: string) => void;
+  onAnswer: (questionNumber: number, answer: string | null) => void;
   marked?: Set<number>;
   onToggleMarked?: (questionNumber: number) => void;
 }) {
@@ -65,9 +65,9 @@ export function AnswerSheet({ questions, answers, disabled, onAnswer, marked = n
                       <p className="min-w-0 flex-1 whitespace-pre-wrap text-sm font-medium text-navy-600">{question.content}</p>
                       <button type="button" disabled={disabled} onClick={() => onToggleMarked?.(question.number)} aria-label={marked.has(question.number) ? `Bỏ đánh dấu câu ${question.number}` : `Đánh dấu xem lại câu ${question.number}`} className={`flex size-11 shrink-0 items-center justify-center rounded-lg sm:size-8 ${marked.has(question.number) ? "bg-amber-200 text-amber-800" : "bg-white text-navy-300"}`}><Flag className="size-4" /></button>
                     </div>
-                    {question.type === "MULTIPLE_CHOICE" && <div className="mt-3 grid gap-2 sm:grid-cols-2">{multipleChoiceOptions.map((option, index) => { const choice = String.fromCharCode(65 + index); return <button type="button" disabled={disabled} key={choice} onClick={() => onAnswer(question.number, choice)} className={`min-h-11 rounded-xl border px-3 py-2 text-left text-xs ${answer === choice ? "border-navy-600 bg-navy-600 text-white" : "border-navy-100 bg-white text-navy-500"}`}><strong>{choice}.</strong> {withoutChoicePrefix(option, index)}</button>; })}</div>}
+                    {question.type === "MULTIPLE_CHOICE" && <div className="mt-3 grid gap-2 sm:grid-cols-2">{multipleChoiceOptions.map((option, index) => { const choice = String.fromCharCode(65 + index); return <button type="button" disabled={disabled} key={choice} onClick={() => onAnswer(question.number, answer === choice ? null : choice)} className={`min-h-11 rounded-xl border px-3 py-2 text-left text-xs ${answer === choice ? "border-navy-600 bg-navy-600 text-white" : "border-navy-100 bg-white text-navy-500"}`}><strong>{choice}.</strong> {withoutChoicePrefix(option, index)}</button>; })}</div>}
                     {question.type === "TRUE_FALSE" && <div className="mt-3 space-y-2">{answer.split(",").map((value, index) => <div key={index} className="flex items-center gap-2 rounded-xl bg-white px-3 py-2"><span className="min-w-0 flex-1 text-xs text-navy-500"><strong>{String.fromCharCode(97 + index)})</strong> {withoutStatementPrefix(question.options[index] ?? "", index)}</span><div className="flex shrink-0 gap-1">{["D", "S"].map((choice) => <button type="button" disabled={disabled} key={choice} aria-label={`${String.fromCharCode(97 + index)} ${choice === "D" ? "đúng" : "sai"}`} onClick={() => { const values = answer.split(","); values[index] = choice; onAnswer(question.number, values.join(",")); }} className={`size-11 rounded-lg text-xs font-semibold sm:size-9 ${value === choice ? "bg-navy-600 text-white" : "bg-pastel-50 text-navy-400"}`}>{choice === "D" ? "Đ" : "S"}</button>)}</div></div>)}</div>}
-                    {question.type === "SHORT_ANSWER" && <input disabled={disabled} value={answer} maxLength={50} onChange={(event) => onAnswer(question.number, event.target.value)} className="mt-3 w-full rounded-xl border border-navy-100 bg-white px-3 py-2.5 text-sm text-navy-600 outline-none focus:border-navy-400" placeholder="Nhập đáp án" />}
+                    {question.type === "SHORT_ANSWER" && <input disabled={disabled} value={answer} maxLength={50} onChange={(event) => onAnswer(question.number, event.target.value || null)} className="mt-3 w-full rounded-xl border border-navy-100 bg-white px-3 py-2.5 text-sm text-navy-600 outline-none focus:border-navy-400" placeholder="Nhập đáp án" />}
                   </div>
                 );
               })}

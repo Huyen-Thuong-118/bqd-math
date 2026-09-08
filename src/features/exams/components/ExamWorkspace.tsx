@@ -34,10 +34,10 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
     isCompleteAnswer(question, answers[question.number]),
   ).length;
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (automatic = false) => {
     if (submittingRef.current) return;
     const unanswered = attempt.questions.length - answeredCount;
-    if (unanswered > 0 && !window.confirm(`Bạn còn ${unanswered} câu chưa trả lời. Vẫn nộp bài?`)) return;
+    if (!automatic && unanswered > 0 && !window.confirm(`Bạn còn ${unanswered} câu chưa trả lời. Vẫn nộp bài?`)) return;
     submittingRef.current = true;
     setIsSubmitting(true);
     setError(undefined);
@@ -78,7 +78,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
               {saveStatus === "saved" && <CheckCircle2 className="mr-1 inline size-4" />}
               {SAVE_LABEL[saveStatus]}
             </span>
-            {attempt.mode === "MOCK" && <ExamTimer expiresAt={attempt.expiresAt} onExpire={handleSubmit} />}
+            {attempt.mode === "MOCK" && <ExamTimer expiresAt={attempt.expiresAt} onExpire={() => void handleSubmit(true)} />}
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3">

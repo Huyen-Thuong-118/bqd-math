@@ -54,8 +54,8 @@ async function postAnswers(cookie: string, attemptId: string) {
     body: JSON.stringify({
       attemptId,
       changes: [
-        { questionNumber: 1, selectedAnswer: "B", changedAt: new Date().toISOString() },
-        { questionNumber: 2, selectedAnswer: "A", changedAt: new Date().toISOString() },
+        { eventId: randomUUID(), questionNumber: 1, selectedAnswer: "B", changedAt: new Date().toISOString() },
+        { eventId: randomUUID(), questionNumber: 2, selectedAnswer: "A", changedAt: new Date().toISOString() },
       ],
     }),
   });

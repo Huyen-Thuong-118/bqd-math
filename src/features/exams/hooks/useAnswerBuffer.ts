@@ -4,8 +4,31 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerChange } from "../types";
 
 const FLUSH_INTERVAL_MS = 2500;
+const MAX_CHANGES_PER_BATCH = 100;
 
 export type SaveStatus = "saved" | "saving" | "unsaved" | "error";
+
+function createEventId() {
+  return crypto.randomUUID().replaceAll("-", "");
+}
+
+function readQueue(key: string): AnswerChange[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    if (!Array.isArray(value)) return [];
+    return value.filter(
+      (item): item is AnswerChange =>
+        Boolean(item) &&
+        typeof item.eventId === "string" &&
+        Number.isInteger(item.questionNumber) &&
+        (typeof item.selectedAnswer === "string" || item.selectedAnswer === null) &&
+        typeof item.changedAt === "string",
+    );
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
+}
 
 export function useAnswerBuffer(
   attemptId: string,
@@ -17,26 +40,36 @@ export function useAnswerBuffer(
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const pendingRef = useRef<AnswerChange[]>([]);
   const flushingRef = useRef<Promise<boolean> | null>(null);
-  const storageKey = `bqd-exam-draft:${attemptId}`;
+  const queueKey = `bqd-exam-events:${attemptId}`;
+
+  const persistQueue = useCallback(() => {
+    try {
+      if (pendingRef.current.length === 0) localStorage.removeItem(queueKey);
+      else localStorage.setItem(queueKey, JSON.stringify(pendingRef.current));
+    } catch {}
+  }, [queueKey]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const recovered = JSON.parse(localStorage.getItem(storageKey) ?? "null") as Record<number, string> | null;
-        if (!recovered) return;
-        const changes = Object.entries(recovered).filter(([number, selectedAnswer]) => Number(number) > 0 && typeof selectedAnswer === "string" && initialAnswers[Number(number)] !== selectedAnswer).map(([number, selectedAnswer]) => ({ questionNumber: Number(number), selectedAnswer, changedAt: new Date().toISOString() }));
-        if (!changes.length) return;
-        setAnswers((current) => ({ ...current, ...recovered })); pendingRef.current.push(...changes); setSaveStatus("unsaved");
-      } catch { localStorage.removeItem(storageKey); }
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [initialAnswers, storageKey]);
+    const recovered = readQueue(queueKey);
+    if (recovered.length === 0) return;
+    pendingRef.current = recovered;
+    setAnswers((current) => {
+      const next = { ...current };
+      for (const change of recovered) {
+        if (change.selectedAnswer === null) delete next[change.questionNumber];
+        else next[change.questionNumber] = change.selectedAnswer;
+      }
+      return next;
+    });
+    setHistory((current) => [...current, ...recovered]);
+    setSaveStatus("unsaved");
+  }, [queueKey]);
 
   const flush = useCallback(async (): Promise<boolean> => {
     if (flushingRef.current) return flushingRef.current;
     if (pendingRef.current.length === 0) return true;
 
-    const changes = pendingRef.current.splice(0);
+    const changes = pendingRef.current.slice(0, MAX_CHANGES_PER_BATCH);
     setSaveStatus("saving");
     const request = fetch(`/api/exams/attempts/${attemptId}/answers`, {
       method: "POST",
@@ -45,19 +78,22 @@ export function useAnswerBuffer(
       keepalive: true,
     })
       .then(async (response) => {
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null;
+        const body = (await response.json().catch(() => null)) as
+          | { error?: string; acknowledgedEventIds?: string[] }
+          | null;
+        if (!response.ok || !body?.acknowledgedEventIds) {
           throw new Error(body?.error ?? "Không thể lưu đáp án.");
         }
+        const acknowledged = new Set(body.acknowledgedEventIds);
+        pendingRef.current = pendingRef.current.filter(
+          (change) => !acknowledged.has(change.eventId),
+        );
+        persistQueue();
         setSaveStatus(pendingRef.current.length ? "unsaved" : "saved");
-        if (pendingRef.current.length === 0) localStorage.removeItem(storageKey);
         return true;
       })
       .catch(() => {
-        // Đưa batch lỗi về đầu hàng đợi, giữ đúng thứ tự trước các click mới.
-        pendingRef.current = [...changes, ...pendingRef.current];
+        persistQueue();
         setSaveStatus("error");
         return false;
       })
@@ -67,7 +103,7 @@ export function useAnswerBuffer(
 
     flushingRef.current = request;
     return request;
-  }, [attemptId, storageKey]);
+  }, [attemptId, persistQueue]);
 
   useEffect(() => {
     const interval = window.setInterval(() => void flush(), FLUSH_INTERVAL_MS);
@@ -75,52 +111,44 @@ export function useAnswerBuffer(
   }, [flush]);
 
   useEffect(() => {
-    function flushWithBeacon() {
-      if (pendingRef.current.length === 0 || !navigator.sendBeacon) return;
-      const changes = pendingRef.current;
-      const sent = navigator.sendBeacon(
-        `/api/exams/attempts/${attemptId}/answers`,
-        new Blob([JSON.stringify({ attemptId, changes })], {
-          type: "application/json",
-        }),
-      );
-      if (sent) pendingRef.current = [];
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "hidden") flushWithBeacon();
-      else {
-        void fetch(`/api/exams/attempts/${attemptId}/answers`, { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((body: { answers?: Record<number, string> } | null) => { if (body?.answers) setAnswers((current) => ({ ...body.answers, ...current })); });
-      }
-    }
-
-    window.addEventListener("pagehide", flushWithBeacon);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      window.removeEventListener("pagehide", flushWithBeacon);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    const flushDurably = () => {
+      persistQueue();
+      void flush();
     };
-  }, [attemptId]);
+    const synchronize = () => {
+      if (document.visibilityState === "visible") void flush();
+    };
+    window.addEventListener("pagehide", flushDurably);
+    document.addEventListener("visibilitychange", synchronize);
+    return () => {
+      window.removeEventListener("pagehide", flushDurably);
+      document.removeEventListener("visibilitychange", synchronize);
+    };
+  }, [flush, persistQueue]);
 
   const selectAnswer = useCallback(
-    (questionNumber: number, selectedAnswer: string) => {
+    (questionNumber: number, selectedAnswer: string | null) => {
       const change: AnswerChange = {
+        eventId: createEventId(),
         questionNumber,
         selectedAnswer,
         changedAt: new Date().toISOString(),
       };
-      setAnswers((current) => ({ ...current, [questionNumber]: selectedAnswer }));
+      setAnswers((current) => {
+        const next = { ...current };
+        if (selectedAnswer === null) delete next[questionNumber];
+        else next[questionNumber] = selectedAnswer;
+        return next;
+      });
       setHistory((current) => [...current, change]);
       pendingRef.current.push(change);
-      try { const stored = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as Record<number, string>; localStorage.setItem(storageKey, JSON.stringify({ ...stored, [questionNumber]: selectedAnswer })); } catch { /* Trình duyệt có thể chặn localStorage; autosave mạng vẫn hoạt động. */ }
+      persistQueue();
       setSaveStatus("unsaved");
     },
-    [storageKey],
+    [persistQueue],
   );
 
   const flushAll = useCallback(async () => {
-    // Một request có thể đang chạy trong lúc user vừa chọn thêm đáp án.
-    // Lặp cho tới khi hàng đợi rỗng để nút Nộp không vượt qua click cuối.
     while (flushingRef.current || pendingRef.current.length > 0) {
       const saved = await flush();
       if (!saved) return false;

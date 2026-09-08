@@ -18,11 +18,14 @@ export function validateAnswerBatch(payload: unknown): payload is AnswerBatchPay
     value.changes.every(
       (change) =>
         change &&
+        typeof change.eventId === "string" &&
+        /^[a-zA-Z0-9_-]{16,128}$/.test(change.eventId) &&
         Number.isInteger(change.questionNumber) &&
         change.questionNumber > 0 &&
-        typeof change.selectedAnswer === "string" &&
-        change.selectedAnswer.trim().length > 0 &&
-        change.selectedAnswer.length <= 50 &&
+        (change.selectedAnswer === null ||
+          (typeof change.selectedAnswer === "string" &&
+            change.selectedAnswer.trim().length > 0 &&
+            change.selectedAnswer.length <= 50)) &&
         typeof change.changedAt === "string" &&
         Number.isFinite(Date.parse(change.changedAt)),
     )
@@ -66,14 +69,36 @@ export async function saveAnswerBatchForUser(
     if (!attempt.exam.examLinks.length || !canWriteAnswers(attempt.exam, attempt.expiresAt)) throw new ExamAccessError("Đề đã đóng hoặc bạn không còn quyền làm bài.", 409);
     const questionIdByNumber = new Map(attempt.exam.questions.map((question) => [question.number, question.id]));
     if (payload.changes.some((change) => !questionIdByNumber.has(change.questionNumber))) throw new ExamAccessError("Đáp án chứa số câu không hợp lệ.", 409);
-    const receivedAt = Date.now(); const latestByQuestion = new Map<number, string>();
-    for (const change of payload.changes) latestByQuestion.set(change.questionNumber, change.selectedAnswer.trim().toUpperCase());
-    await tx.answerHistory.createMany({ data: payload.changes.map((change, index) => ({ attemptId: payload.attemptId, questionNumber: change.questionNumber, selectedAnswer: change.selectedAnswer.trim().toUpperCase(), changedAt: new Date(receivedAt + index) })) });
+    const existingEvents = await tx.answerHistory.findMany({
+      where: { eventId: { in: payload.changes.map((change) => change.eventId) } },
+      select: { eventId: true },
+    });
+    const existingEventIds = new Set(existingEvents.map((event) => event.eventId));
+    const newChanges = payload.changes.filter(
+      (change) => !existingEventIds.has(change.eventId),
+    );
+    const latestByQuestion = new Map<number, string | null>();
+    for (const change of newChanges) {
+      latestByQuestion.set(
+        change.questionNumber,
+        change.selectedAnswer?.trim().toUpperCase() ?? null,
+      );
+    }
+    await tx.answerHistory.createMany({
+      data: newChanges.map((change) => ({
+        eventId: change.eventId,
+        attemptId: payload.attemptId,
+        questionNumber: change.questionNumber,
+        selectedAnswer: change.selectedAnswer?.trim().toUpperCase() ?? null,
+        changedAt: new Date(change.changedAt),
+      })),
+      skipDuplicates: true,
+    });
     for (const [questionNumber, selectedAnswer] of latestByQuestion) {
       const questionId = questionIdByNumber.get(questionNumber)!;
       await tx.attemptAnswer.upsert({ where: { attemptId_questionId: { attemptId: payload.attemptId, questionId } }, update: { selectedAnswer, questionNumber }, create: { attemptId: payload.attemptId, questionId, questionNumber, selectedAnswer } });
     }
-    return { count: payload.changes.length };
+    return { count: payload.changes.length, acknowledgedEventIds: payload.changes.map((change) => change.eventId) };
   });
 }
 
@@ -86,7 +111,10 @@ export async function getAnswerHistory(attemptId: string) {
 
 export async function getLatestAnswers(attemptId: string) {
   const latest = new Map<number, string>();
-  for (const entry of await getAnswerHistory(attemptId)) latest.set(entry.questionNumber, entry.selectedAnswer);
+  for (const entry of await getAnswerHistory(attemptId)) {
+    if (entry.selectedAnswer) latest.set(entry.questionNumber, entry.selectedAnswer);
+    else latest.delete(entry.questionNumber);
+  }
   const rows = await db.attemptAnswer.findMany({ where: { attemptId, selectedAnswer: { not: null } }, select: { questionNumber: true, selectedAnswer: true } });
   for (const entry of rows) if (entry.selectedAnswer) latest.set(entry.questionNumber, entry.selectedAnswer);
   return latest;

@@ -46,7 +46,7 @@ export async function startAttemptForUser(examId: string, userId: string) {
   const openAttempt = exam.attempts.find((attempt) => !attempt.submittedAt);
   if (openAttempt) {
     if (!canWriteAnswers(exam, openAttempt.expiresAt, now) && canFinalizeExam()) {
-      await submitAttemptForUser(openAttempt.id, userId);
+      await submitAttemptForUser(openAttempt.id, userId, "AUTO_SUBMITTED");
       return { attemptId: openAttempt.id, submitted: true };
     }
     return { attemptId: openAttempt.id, submitted: false };
@@ -87,7 +87,11 @@ export async function startAttemptForUser(examId: string, userId: string) {
 }
 
 /** Nộp/chấm idempotent: nhiều request cùng attempt vẫn chỉ tạo một snapshot. */
-export async function submitAttemptForUser(attemptId: string, userId: string) {
+export async function submitAttemptForUser(
+  attemptId: string,
+  userId: string,
+  submissionReason: "SUBMITTED" | "AUTO_SUBMITTED" = "SUBMITTED",
+) {
   return db.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "ExamAttempt" WHERE "id" = ${attemptId} AND "userId" = ${userId} FOR UPDATE`);
     const attempt = await tx.examAttempt.findFirst({
@@ -117,7 +121,8 @@ export async function submitAttemptForUser(attemptId: string, userId: string) {
 
     const latestAnswers = new Map<number, string>();
     for (const answer of attempt.answers) {
-      latestAnswers.set(answer.questionNumber, answer.selectedAnswer);
+      if (answer.selectedAnswer) latestAnswers.set(answer.questionNumber, answer.selectedAnswer);
+      else latestAnswers.delete(answer.questionNumber);
     }
     for (const answer of attempt.finalizedAnswers) {
       if (answer.selectedAnswer) latestAnswers.set(answer.questionNumber, answer.selectedAnswer);
@@ -138,6 +143,7 @@ export async function submitAttemptForUser(attemptId: string, userId: string) {
         incorrectCount: grade.incorrectCount,
         unansweredCount: grade.unansweredCount,
         openKey: null,
+        submissionReason,
       },
     });
     if (claimed.count === 0) {
@@ -153,4 +159,25 @@ export async function submitAttemptForUser(attemptId: string, userId: string) {
     }
     return { attemptId: attempt.id, score: grade.score };
   });
+}
+
+export async function finalizeExpiredAttempts(limit = 100) {
+  const attempts = await db.examAttempt.findMany({
+    where: {
+      submittedAt: null,
+      OR: [
+        { expiresAt: { lte: new Date() } },
+        { exam: { status: { not: "PUBLISHED" } } },
+      ],
+    },
+    select: { id: true, userId: true },
+    take: limit,
+    orderBy: { expiresAt: "asc" },
+  });
+  let finalized = 0;
+  for (const attempt of attempts) {
+    await submitAttemptForUser(attempt.id, attempt.userId, "AUTO_SUBMITTED");
+    finalized += 1;
+  }
+  return { inspected: attempts.length, finalized };
 }
