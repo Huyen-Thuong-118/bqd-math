@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { generateTempPassword, hashPassword } from "@/lib/password";
 
@@ -23,9 +24,13 @@ async function assertAdmin(): Promise<void> {
 
   const current = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true, status: true },
+    select: { role: true, status: true, credentialVersion: true },
   });
-  if (current?.role !== "ADMIN" || current.status !== "ACTIVE") {
+  if (
+    current?.role !== "ADMIN" ||
+    current.status !== "ACTIVE" ||
+    !hasCurrentCredentialVersion(session.user.credentialVersion, current.credentialVersion)
+  ) {
     throw new Error("Chỉ ADMIN đang hoạt động mới được thực hiện hành động này.");
   }
 }
@@ -128,7 +133,11 @@ export async function resetStudentPassword(
 
     await db.user.update({
       where: { id: userId, role: "STUDENT", status: "ACTIVE" },
-      data: { passwordHash, mustChangePassword: true },
+      data: {
+        passwordHash,
+        mustChangePassword: true,
+        credentialVersion: { increment: 1 },
+      },
     });
     revalidatePath(ACCOUNTS_PAGE_PATH);
     return { success: true, temporaryPassword };

@@ -45,7 +45,7 @@ export async function changePasswordForUser(
 
   const user = await db.user.findFirst({
     where: { id: userId, status: "ACTIVE" },
-    select: { passwordHash: true },
+    select: { passwordHash: true, credentialVersion: true },
   });
   if (!user) return { success: false, error: "Tài khoản không còn hoạt động." };
   if (!user.passwordHash) {
@@ -77,8 +77,13 @@ export async function changePasswordForUser(
       id: userId,
       status: "ACTIVE",
       passwordHash: user.passwordHash,
+      credentialVersion: user.credentialVersion,
     },
-    data: { passwordHash, mustChangePassword: false },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+      credentialVersion: { increment: 1 },
+    },
   });
   if (updated.count !== 1) {
     return { success: false, error: "Mật khẩu vừa được thay đổi ở nơi khác. Hãy thử lại." };

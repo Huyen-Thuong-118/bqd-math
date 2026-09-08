@@ -78,6 +78,7 @@ export const {
           role: user.role,
           status: user.status,
           mustChangePassword: user.mustChangePassword,
+          credentialVersion: user.credentialVersion,
         };
       },
     }),
@@ -99,10 +100,21 @@ export const {
       // `user` chỉ có ở lần đăng nhập đầu (từ authorize() hoặc từ Adapter) —
       // các lần refresh JWT sau đó chỉ có `token`.
       if (user) {
+        const current = await db.user.findUnique({
+          where: { id: user.id },
+          select: {
+            role: true,
+            status: true,
+            mustChangePassword: true,
+            credentialVersion: true,
+          },
+        });
+        if (!current) return token;
         token.id = user.id as string;
-        token.role = user.role;
-        token.status = user.status;
-        token.mustChangePassword = user.mustChangePassword;
+        token.role = current.role;
+        token.status = current.status;
+        token.mustChangePassword = current.mustChangePassword;
+        token.credentialVersion = current.credentialVersion;
       }
       return token;
     },
@@ -111,6 +123,7 @@ export const {
       session.user.role = token.role;
       session.user.status = token.status;
       session.user.mustChangePassword = token.mustChangePassword;
+      session.user.credentialVersion = token.credentialVersion;
       return session;
     },
   },

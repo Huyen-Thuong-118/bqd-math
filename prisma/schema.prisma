@@ -62,6 +62,7 @@ model User {
   // Đánh dấu mật khẩu vừa được admin reset — bắt buộc HS đổi mật khẩu ở
   // lần đăng nhập tiếp theo thay vì tiếp tục dùng mật khẩu tạm admin biết.
   mustChangePassword Boolean @default(false)
+  credentialVersion  Int     @default(1)
 
   emailOptIn  Boolean   @default(false) // đăng ký nhận email khi có đề mới
   suspendedAt DateTime? // chỉ có giá trị khi status = SUSPENDED, xem features/accounts

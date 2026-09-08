@@ -11,6 +11,7 @@ declare module "next-auth" {
     role: Role;
     status: AccountStatus;
     mustChangePassword: boolean;
+    credentialVersion: number;
     // Chỉ cần đọc trong callbacks.signIn để phát hiện user Google mới (chưa
     // hoàn tất hồ sơ) — KHÔNG lộ ra session.user (xem auth.ts).
     studentPhone?: string | null;
@@ -22,6 +23,7 @@ declare module "next-auth" {
       role: Role;
       status: AccountStatus;
       mustChangePassword: boolean;
+      credentialVersion: number;
     } & DefaultSession["user"];
   }
 }
@@ -36,6 +38,7 @@ declare module "next-auth/jwt" {
     role: Role;
     status: AccountStatus;
     mustChangePassword: boolean;
+    credentialVersion: number;
   }
 }
 
@@ -45,5 +48,6 @@ declare module "@auth/core/jwt" {
     role: Role;
     status: AccountStatus;
     mustChangePassword: boolean;
+    credentialVersion: number;
   }
 }

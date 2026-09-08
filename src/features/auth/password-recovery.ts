@@ -146,7 +146,11 @@ export async function consumePasswordResetGrant(
 
     await tx.user.update({
       where: { id: grant.userId },
-      data: { passwordHash, mustChangePassword: false },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        credentialVersion: { increment: 1 },
+      },
     });
     return true;
   });

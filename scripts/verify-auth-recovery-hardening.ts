@@ -97,13 +97,14 @@ async function main() {
     );
     const changed = await db.user.findUniqueOrThrow({
       where: { id: users[2].id },
-      select: { passwordHash: true },
+      select: { passwordHash: true, credentialVersion: true },
     });
     assert(
       Boolean(changed.passwordHash) &&
         (await verifyPassword("ChangedPassword456!", changed.passwordHash!)),
       "Password sau reset chưa được lưu đúng.",
     );
+    assert(changed.credentialVersion === 2, "Reset password phải tăng credential version.");
 
     const expiredOtp = "123456";
     const expiredChallenge = await db.passwordResetOtp.create({

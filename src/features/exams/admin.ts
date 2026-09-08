@@ -1,6 +1,7 @@
 import "server-only";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 
 export async function requireActiveAdminId() {
@@ -8,9 +9,13 @@ export async function requireActiveAdminId() {
   if (!session?.user.id) throw new Error("Bạn chưa đăng nhập.");
   const admin = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true, status: true },
+    select: { role: true, status: true, credentialVersion: true },
   });
-  if (admin?.role !== "ADMIN" || admin.status !== "ACTIVE") {
+  if (
+    admin?.role !== "ADMIN" ||
+    admin.status !== "ACTIVE" ||
+    !hasCurrentCredentialVersion(session.user.credentialVersion, admin.credentialVersion)
+  ) {
     throw new Error("Chỉ giáo viên đang hoạt động được quản lý đề.");
   }
   return session.user.id;

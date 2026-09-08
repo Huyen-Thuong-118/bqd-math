@@ -1,6 +1,7 @@
 import "server-only";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { ExamAccessError } from "./errors";
 
@@ -18,6 +19,7 @@ export async function requireActiveStudentId(): Promise<string> {
       studentPhone: true,
       parentPhone: true,
       mustChangePassword: true,
+      credentialVersion: true,
     },
   });
   if (
@@ -25,7 +27,8 @@ export async function requireActiveStudentId(): Promise<string> {
     user.status !== "ACTIVE" ||
     !user.studentPhone ||
     !user.parentPhone ||
-    user.mustChangePassword
+    user.mustChangePassword ||
+    !hasCurrentCredentialVersion(session.user.credentialVersion, user.credentialVersion)
   ) {
     throw new ExamAccessError("Tài khoản học sinh không có quyền thực hiện.", 403);
   }

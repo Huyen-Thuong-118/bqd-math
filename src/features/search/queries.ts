@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import type { SearchData, SearchFilters, SearchItem } from "./types";
 
@@ -41,8 +42,12 @@ async function getFolderLabelsForResults(folderIds: (string | null)[]) {
 export async function getSearchResults(filters: SearchFilters): Promise<SearchData> {
   const session = await auth();
   if (!session?.user.id) redirect("/dang-nhap");
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true, status: true } });
-  if (!user || user.status !== "ACTIVE") redirect("/sau-dang-nhap");
+  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true, status: true, credentialVersion: true } });
+  if (
+    !user ||
+    user.status !== "ACTIVE" ||
+    !hasCurrentCredentialVersion(session.user.credentialVersion, user.credentialVersion)
+  ) redirect("/sau-dang-nhap");
   const isAdmin = user.role === "ADMIN";
   const q = filters.q.trim().slice(0, 100);
   const pageSize = 20;

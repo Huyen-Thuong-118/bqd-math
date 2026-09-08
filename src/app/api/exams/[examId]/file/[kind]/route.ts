@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { readDocument } from "@/lib/storage";
 
@@ -22,9 +23,13 @@ export async function GET(
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true, status: true },
+    select: { role: true, status: true, credentialVersion: true },
   });
-  if (!user || user.status !== "ACTIVE") {
+  if (
+    !user ||
+    user.status !== "ACTIVE" ||
+    !hasCurrentCredentialVersion(session.user.credentialVersion, user.credentialVersion)
+  ) {
     return errorResponse("Tài khoản không có quyền truy cập.", 403);
   }
 

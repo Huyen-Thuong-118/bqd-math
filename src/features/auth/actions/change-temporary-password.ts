@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import {
@@ -39,14 +40,32 @@ export async function changeTemporaryPassword(
 
   try {
     const passwordHash = await hashPassword(input.password);
+    const account = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { credentialVersion: true },
+    });
+    if (
+      !account ||
+      !hasCurrentCredentialVersion(
+        session.user.credentialVersion,
+        account.credentialVersion,
+      )
+    ) {
+      return { success: false, error: "Phiên đăng nhập không còn hiệu lực." };
+    }
     const result = await db.user.updateMany({
       where: {
         id: session.user.id,
         role: "STUDENT",
         status: "ACTIVE",
         mustChangePassword: true,
+        credentialVersion: account.credentialVersion,
       },
-      data: { passwordHash, mustChangePassword: false },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        credentialVersion: { increment: 1 },
+      },
     });
 
     if (result.count !== 1) {

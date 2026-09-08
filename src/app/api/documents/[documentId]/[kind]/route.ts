@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { getSignedDocumentUrl, isCloudStorageConfigured, readDocument } from "@/lib/storage";
 
@@ -12,8 +13,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ docu
   if (!session?.user.id) return error("Bạn chưa đăng nhập.", 401);
   const { documentId, kind } = await params;
   if (kind !== "file" && kind !== "answer") return error("Loại file không hợp lệ.", 404);
-  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true, status: true } });
-  if (!user || user.status !== "ACTIVE") return error("Tài khoản không có quyền truy cập.", 403);
+  const user = await db.user.findUnique({ where: { id: session.user.id }, select: { role: true, status: true, credentialVersion: true } });
+  if (!user || user.status !== "ACTIVE" || !hasCurrentCredentialVersion(session.user.credentialVersion, user.credentialVersion)) return error("Tài khoản không có quyền truy cập.", 403);
   const document = await db.document.findUnique({
     where: { id: documentId },
     select: { fileUrl: true, fileName: true, contentType: true, answerUrl: true, showAnswer: true, allowDownload: true, classLinks: { where: { class: { enrollments: { some: { studentId: session.user.id } } } }, select: { id: true }, take: 1 } },

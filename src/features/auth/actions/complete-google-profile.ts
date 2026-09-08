@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { db } from "@/lib/db";
 import { generateStudentCode } from "@/lib/management-codes";
 import { validateParentPhone, validatePhone } from "../lib/validation";
@@ -40,11 +41,24 @@ export async function completeGoogleProfile(
   }
 
   try {
-    const current = await db.user.findUnique({ where: { id: session.user.id }, select: { studentCode: true } });
+    const current = await db.user.findUnique({ where: { id: session.user.id }, select: { studentCode: true, credentialVersion: true } });
+    if (
+      !current ||
+      !hasCurrentCredentialVersion(
+        session.user.credentialVersion,
+        current.credentialVersion,
+      )
+    ) {
+      return { success: false, error: "Phiên đăng nhập không còn hiệu lực." };
+    }
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         await db.user.update({
-          where: { id: session.user.id, role: "STUDENT" },
+          where: {
+            id: session.user.id,
+            role: "STUDENT",
+            credentialVersion: current.credentialVersion,
+          },
           data: { studentPhone, parentPhone, studentCode: current?.studentCode ?? generateStudentCode() },
         });
         return { success: true };

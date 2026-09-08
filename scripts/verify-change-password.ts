@@ -3,6 +3,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 
 import { changePasswordForUser } from "../src/features/auth/change-password-service";
+import { hasCurrentCredentialVersion } from "../src/features/auth/lib/credential-version";
 import { db } from "../src/lib/db";
 import { hashPassword, verifyPassword } from "../src/lib/password";
 import { requireTestDatabase } from "./test-database-guard";
@@ -13,6 +14,10 @@ function assert(condition: unknown, message: string): asserts condition {
 
 async function main() {
   requireTestDatabase();
+  assert(
+    hasCurrentCredentialVersion(2, 2) && !hasCurrentCredentialVersion(1, 2),
+    "Credential version phải chặn JWT cũ sau khi password thay đổi.",
+  );
   const suffix = randomUUID().replaceAll("-", "").slice(0, 10);
   const oldPassword = "OldPassword123!";
   const newPassword = "NewPassword456!";
@@ -46,10 +51,11 @@ async function main() {
       confirmPassword: newPassword,
     });
     assert(changed.success, "Mật khẩu hợp lệ phải đổi được.");
-    const updated = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { passwordHash: true, mustChangePassword: true } });
+    const updated = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { passwordHash: true, mustChangePassword: true, credentialVersion: true } });
     assert(updated.passwordHash && !(await verifyPassword(oldPassword, updated.passwordHash)), "Mật khẩu cũ vẫn còn đăng nhập được.");
     assert(updated.passwordHash && await verifyPassword(newPassword, updated.passwordHash), "Mật khẩu mới chưa được lưu đúng.");
     assert(!updated.mustChangePassword, "Đổi thành công phải xóa cờ mật khẩu tạm.");
+    assert(updated.credentialVersion === 2, "Đổi mật khẩu phải vô hiệu credential session cũ.");
 
     await db.user.update({ where: { id: user.id }, data: { status: "SUSPENDED" } });
     const suspended = await changePasswordForUser(user.id, {
