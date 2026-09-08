@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ExamAccessError } from "./errors";
+import { canWriteAnswers } from "./availability";
 import type { AnswerBatchPayload } from "./types";
 
 const MAX_CHANGES_PER_BATCH = 100;
@@ -37,10 +38,32 @@ export async function saveAnswerBatchForUser(
   return db.$transaction(async (tx) => {
     // Khóa row attempt để autosave cuối và submit không vượt nhau.
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "ExamAttempt" WHERE "id" = ${payload.attemptId} AND "userId" = ${userId} FOR UPDATE`);
-    const attempt = await tx.examAttempt.findFirst({ where: { id: payload.attemptId, userId }, select: { submittedAt: true, expiresAt: true, exam: { select: { questions: { select: { id: true, number: true } } } } } });
+    const attempt = await tx.examAttempt.findFirst({
+      where: { id: payload.attemptId, userId },
+      select: {
+        submittedAt: true,
+        expiresAt: true,
+        exam: {
+          select: {
+            status: true,
+            mode: true,
+            isForever: true,
+            availableFrom: true,
+            availableTo: true,
+            durationMinutes: true,
+            questions: { select: { id: true, number: true } },
+            examLinks: {
+              where: { class: { enrollments: { some: { studentId: userId } } } },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
     if (!attempt) throw new ExamAccessError("Không tìm thấy lượt làm bài.", 404);
     if (attempt.submittedAt) throw new ExamAccessError("Bài đã được nộp.", 409);
-    if (attempt.expiresAt && attempt.expiresAt <= new Date()) throw new ExamAccessError("Đã hết thời gian làm bài.", 409);
+    if (!attempt.exam.examLinks.length || !canWriteAnswers(attempt.exam, attempt.expiresAt)) throw new ExamAccessError("Đề đã đóng hoặc bạn không còn quyền làm bài.", 409);
     const questionIdByNumber = new Map(attempt.exam.questions.map((question) => [question.number, question.id]));
     if (payload.changes.some((change) => !questionIdByNumber.has(change.questionNumber))) throw new ExamAccessError("Đáp án chứa số câu không hợp lệ.", 409);
     const receivedAt = Date.now(); const latestByQuestion = new Map<number, string>();

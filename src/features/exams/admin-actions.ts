@@ -16,6 +16,7 @@ import {
   uploadDocument,
 } from "@/lib/storage";
 import { requireActiveAdminId } from "./admin";
+import { parseVietnamDateTime } from "./availability";
 import { analyzeExamPdfsWithGemini, hasGeminiConfig } from "./gemini";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
@@ -403,8 +404,8 @@ export async function createExam(formData: FormData): Promise<CreateExamResult> 
     const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
     const availableFromRaw = text(formData, "availableFrom");
     const availableToRaw = text(formData, "availableTo");
-    const availableFrom = !isForever && availableFromRaw ? new Date(availableFromRaw) : null;
-    const availableTo = !isForever && availableToRaw ? new Date(availableToRaw) : null;
+    const availableFrom = !isForever && availableFromRaw ? parseVietnamDateTime(availableFromRaw) : null;
+    const availableTo = !isForever && availableToRaw ? parseVietnamDateTime(availableToRaw) : null;
     const sections = parseSections(text(formData, "sections"));
     const classIds = formData
       .getAll("classIds")
@@ -705,8 +706,8 @@ export async function updateExam(examId: string, formData: FormData): Promise<Up
     const maxAttempts = parsePositiveInteger(text(formData, "maxAttempts"), true);
     const availableFromRaw = text(formData, "availableFrom");
     const availableToRaw = text(formData, "availableTo");
-    const availableFrom = !isForever && availableFromRaw ? new Date(availableFromRaw) : null;
-    const availableTo = !isForever && availableToRaw ? new Date(availableToRaw) : null;
+    const availableFrom = !isForever && availableFromRaw ? parseVietnamDateTime(availableFromRaw) : null;
+    const availableTo = !isForever && availableToRaw ? parseVietnamDateTime(availableToRaw) : null;
     const classIds = [...new Set(formData.getAll("classIds").filter((item): item is string => typeof item === "string"))];
     const folderId = text(formData, "folderId") || null;
     const examPdf = formData.get("examPdf");

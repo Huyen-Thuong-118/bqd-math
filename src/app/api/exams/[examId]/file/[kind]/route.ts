@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { hasCurrentCredentialVersion } from "@/features/auth/lib/credential-version";
 import { getSolutionVisibility } from "@/features/exams/solution-visibility";
+import { canReadExam } from "@/features/exams/availability";
 import { db } from "@/lib/db";
 import { readDocument } from "@/lib/storage";
 
@@ -39,6 +40,11 @@ export async function GET(
     select: {
       title: true,
       status: true,
+      mode: true,
+      isForever: true,
+      availableFrom: true,
+      availableTo: true,
+      durationMinutes: true,
       examFileUrl: true,
       answerFileUrl: true,
       showAnswer: true,
@@ -64,6 +70,9 @@ export async function GET(
   }
   if (!isAdmin && exam.status === "DRAFT") {
     return errorResponse("Đề chưa được xuất bản.", 403);
+  }
+  if (!isAdmin && !canReadExam(exam)) {
+    return errorResponse("Đề chưa trong thời gian được giao.", 403);
   }
 
   const submittedAttempt = exam.attempts[0];

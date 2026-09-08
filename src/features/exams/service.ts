@@ -3,16 +3,12 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ExamAccessError } from "./errors";
 import { gradeExam } from "./grading";
-
-function isAvailableNow(
-  exam: { isForever: boolean; availableFrom: Date | null; availableTo: Date | null },
-  now: Date,
-) {
-  if (exam.isForever) return true;
-  if (exam.availableFrom && exam.availableFrom > now) return false;
-  if (exam.availableTo && exam.availableTo < now) return false;
-  return true;
-}
+import {
+  canFinalizeExam,
+  canStartExam,
+  canWriteAnswers,
+  effectiveAttemptExpiresAt,
+} from "./availability";
 
 /** Core bắt đầu bài tách khỏi session để integration test được trực tiếp. */
 export async function startAttemptForUser(examId: string, userId: string) {
@@ -47,16 +43,16 @@ export async function startAttemptForUser(examId: string, userId: string) {
   }
 
   const now = new Date();
-  if (!isAvailableNow(exam, now)) {
-    throw new ExamAccessError("Đề chưa mở hoặc đã đóng.", 409);
-  }
   const openAttempt = exam.attempts.find((attempt) => !attempt.submittedAt);
   if (openAttempt) {
-    if (openAttempt.expiresAt && openAttempt.expiresAt <= now) {
+    if (!canWriteAnswers(exam, openAttempt.expiresAt, now) && canFinalizeExam()) {
       await submitAttemptForUser(openAttempt.id, userId);
       return { attemptId: openAttempt.id, submitted: true };
     }
     return { attemptId: openAttempt.id, submitted: false };
+  }
+  if (!canStartExam(exam, now)) {
+    throw new ExamAccessError("Đề chưa mở hoặc đã đóng.", 409);
   }
   if (exam.maxAttempts !== null && exam.attempts.length >= exam.maxAttempts) {
     throw new ExamAccessError("Bạn đã sử dụng hết số lượt làm bài.", 409);
@@ -70,9 +66,7 @@ export async function startAttemptForUser(examId: string, userId: string) {
         userId,
         openKey,
         mode: exam.mode,
-        expiresAt: exam.durationMinutes
-          ? new Date(now.getTime() + exam.durationMinutes * 60_000)
-          : null,
+        expiresAt: effectiveAttemptExpiresAt(exam, now),
       },
       select: { id: true },
     });

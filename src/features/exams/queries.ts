@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { requireActiveStudentId } from "./access";
+import { availabilityLabel, canReadExam } from "./availability";
 import { getSolutionVisibility } from "./solution-visibility";
 import type {
   AnswerChange,
@@ -14,29 +15,6 @@ function stringOptions(value: unknown): string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
     ? value
     : [];
-}
-
-function availability(
-  exam: { status: "DRAFT" | "PUBLISHED" | "CLOSED"; isForever: boolean; availableFrom: Date | null; availableTo: Date | null },
-  now: Date,
-) {
-  if (exam.status === "CLOSED") return { available: false, label: "Đã đóng" };
-  if (exam.isForever) return { available: true, label: "Luôn mở" };
-  if (exam.availableFrom && exam.availableFrom > now) {
-    return {
-      available: false,
-      label: `Mở từ ${exam.availableFrom.toLocaleString("vi-VN")}`,
-    };
-  }
-  if (exam.availableTo && exam.availableTo < now) {
-    return { available: false, label: "Đã đóng" };
-  }
-  return {
-    available: true,
-    label: exam.availableTo
-      ? `Đến ${exam.availableTo.toLocaleString("vi-VN")}`
-      : "Đang mở",
-  };
 }
 
 export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
@@ -70,7 +48,7 @@ export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
   const now = new Date();
 
   return exams.map((exam) => {
-    const state = availability(exam, now);
+    const available = canReadExam(exam, now);
     const scores = exam.attempts
       .map((attempt) => attempt.score)
       .filter((score): score is number => score !== null);
@@ -85,8 +63,8 @@ export async function getExamListForCurrentStudent(): Promise<ExamListItem[]> {
       bestScore: scores.length ? Math.max(...scores) : null,
       openAttemptId:
         exam.attempts.find((attempt) => !attempt.submittedAt)?.id ?? null,
-      available: state.available,
-      availabilityLabel: state.label,
+      available,
+      availabilityLabel: availabilityLabel(exam, now),
       recentAttempts: exam.attempts.filter((attempt): attempt is typeof attempt & { score: number; submittedAt: Date } => attempt.score !== null && attempt.submittedAt !== null).slice(0, 5).map((attempt) => ({ id: attempt.id, score: attempt.score, submittedAt: attempt.submittedAt.toISOString() })),
     };
   });
@@ -118,6 +96,12 @@ export async function getTakingAttempt(
       exam: {
         select: {
           title: true,
+          mode: true,
+          status: true,
+          isForever: true,
+          availableFrom: true,
+          availableTo: true,
+          durationMinutes: true,
           examFileUrl: true,
           answerFileUrl: true,
           showAnswer: true,
@@ -139,6 +123,7 @@ export async function getTakingAttempt(
   });
   if (!attempt) return null;
   if (attempt.submittedAt) return { submitted: true };
+  if (!canReadExam(attempt.exam)) return null;
 
   const initialAnswers: Record<number, string> = {};
   const initialHistory: AnswerChange[] = [];

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { requireActiveAdminId } from "@/features/exams/admin";
+import { formatVietnamDateTimeInput } from "@/features/exams/availability";
 import { ExamEditForm } from "@/features/exams/components/ExamEditForm";
 import type { ExamQuestionType } from "@/features/exams/types";
 import { db } from "@/lib/db";
@@ -9,20 +10,6 @@ import { isCloudStorageConfigured } from "@/lib/storage";
 
 export const metadata: Metadata = { title: "Chỉnh sửa đề thi | BQD Math" };
 export const dynamic = "force-dynamic";
-
-function dateTimeLocal(date: Date | null) {
-  if (!date) return "";
-  const formatter = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return formatter.format(date).replace(" ", "T");
-}
 
 function scoringValues(value: unknown) {
   const fallback = {
@@ -116,8 +103,8 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
           durationMinutes: exam.durationMinutes,
           maxAttempts: exam.maxAttempts,
           isForever: exam.isForever,
-          availableFrom: dateTimeLocal(exam.availableFrom),
-          availableTo: dateTimeLocal(exam.availableTo),
+          availableFrom: formatVietnamDateTimeInput(exam.availableFrom),
+          availableTo: formatVietnamDateTimeInput(exam.availableTo),
           allowDownload: exam.allowDownload,
           showAnswer: exam.showAnswer,
           hideWrongAnswers: exam.hideWrongAnswers,

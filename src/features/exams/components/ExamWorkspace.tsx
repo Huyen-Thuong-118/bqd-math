@@ -78,7 +78,7 @@ export function ExamWorkspace({ attempt }: { attempt: TakingAttempt }) {
               {saveStatus === "saved" && <CheckCircle2 className="mr-1 inline size-4" />}
               {SAVE_LABEL[saveStatus]}
             </span>
-            <ExamTimer expiresAt={attempt.expiresAt} onExpire={handleSubmit} />
+            {attempt.mode === "MOCK" && <ExamTimer expiresAt={attempt.expiresAt} onExpire={handleSubmit} />}
           </div>
         </div>
         <div className="mt-4 flex items-center gap-3">
