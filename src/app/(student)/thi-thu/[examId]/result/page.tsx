@@ -62,7 +62,7 @@ export default async function ExamResultPage({
           title="Lời giải"
           muted
           fileUrl={
-            result.hasAnswerFile && result.showAnswer
+            result.hasAnswerFile && result.canViewSolutionFile
               ? `/api/exams/${result.examId}/file/solution`
               : undefined
           }
@@ -70,7 +70,7 @@ export default async function ExamResultPage({
           watermark={result.examTitle}
           unavailableMessage={
             result.hasAnswerFile
-              ? "Giáo viên đang ẩn lời giải."
+              ? "Lời giải đang bị ẩn theo chính sách của giáo viên."
               : "Đề chưa có file lời giải."
           }
         />}

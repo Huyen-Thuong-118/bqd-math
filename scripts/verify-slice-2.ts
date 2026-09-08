@@ -110,6 +110,9 @@ async function main() {
     await db.examAttempt.create({ data: { examId, userId: studentId, mode: "MOCK", submittedAt: new Date(), score: 0 } });
     const solution = await fetch(`${baseUrl}/api/exams/${examId}/file/solution`, { headers: { cookie } });
     assert(solution.ok, "Phải mở lời giải sau khi nộp nếu giáo viên cho phép.");
+    await db.exam.update({ where: { id: examId }, data: { hideWrongAnswers: true } });
+    const restrictedSolution = await fetch(`${baseUrl}/api/exams/${examId}/file/solution`, { headers: { cookie } });
+    assert(restrictedSolution.status === 403, "Không được phát PDF lời giải toàn bộ khi có đáp án phải ẩn.");
     await db.exam.update({ where: { id: examId }, data: { showAnswer: false } });
     const hiddenSolution = await fetch(`${baseUrl}/api/exams/${examId}/file/solution`, { headers: { cookie } });
     assert(hiddenSolution.status === 403, "Phải khóa lời giải khi giáo viên tắt.");

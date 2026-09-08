@@ -79,6 +79,7 @@ export type ExamResult = {
   hasExamFile: boolean;
   hasAnswerFile: boolean;
   showAnswer: boolean;
+  canViewSolutionFile: boolean;
   allowDownload: boolean;
   questions: ResultQuestion[];
 };

@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { requireActiveStudentId } from "./access";
+import { getSolutionVisibility } from "./solution-visibility";
 import type {
   AnswerChange,
   ExamListItem,
@@ -215,6 +216,17 @@ export async function getExamResult(
   });
   if (!attempt || attempt.score === null || !attempt.submittedAt) return null;
 
+  const allAnswersCorrect =
+    attempt.finalizedAnswers.length > 0 &&
+    attempt.finalizedAnswers.every((answer) => answer.isCorrect === true);
+  const solutionFileVisibility = getSolutionVisibility({
+    isAdmin: false,
+    submitted: true,
+    showAnswer: attempt.exam.showAnswer,
+    hideWrongAnswers: attempt.exam.hideWrongAnswers,
+    allAnswersCorrect,
+  });
+
   return {
     attemptId: attempt.id,
     examId: attempt.examId,
@@ -228,20 +240,27 @@ export async function getExamResult(
     hasExamFile: Boolean(attempt.exam.examFileUrl),
     hasAnswerFile: Boolean(attempt.exam.answerFileUrl),
     showAnswer: attempt.exam.showAnswer,
+    canViewSolutionFile: solutionFileVisibility.solutionFile,
     allowDownload: attempt.exam.allowDownload,
-    questions: attempt.finalizedAnswers.map((answer) => ({
-      questionNumber: answer.questionNumber,
-      content: answer.question.content,
-      options: stringOptions(answer.question.options),
-      selectedAnswer: answer.selectedAnswer,
-      correctAnswer:
-        attempt.exam.hideWrongAnswers && !answer.isCorrect
-          ? null
-          : answer.correctAnswer ?? null,
-      isCorrect: answer.isCorrect ?? false,
-      pointsAwarded: answer.pointsAwarded ?? 0,
-      pointsPossible: answer.pointsPossible ?? 0,
-      explanation: answer.question.explanation,
-    })),
+    questions: attempt.finalizedAnswers.map((answer) => {
+      const visibility = getSolutionVisibility({
+        isAdmin: false,
+        submitted: true,
+        showAnswer: attempt.exam.showAnswer,
+        hideWrongAnswers: attempt.exam.hideWrongAnswers,
+        isCorrect: answer.isCorrect,
+      });
+      return {
+        questionNumber: answer.questionNumber,
+        content: answer.question.content,
+        options: stringOptions(answer.question.options),
+        selectedAnswer: answer.selectedAnswer,
+        correctAnswer: visibility.correctAnswer ? answer.correctAnswer ?? null : null,
+        isCorrect: answer.isCorrect ?? false,
+        pointsAwarded: answer.pointsAwarded ?? 0,
+        pointsPossible: answer.pointsPossible ?? 0,
+        explanation: visibility.explanation ? answer.question.explanation : null,
+      };
+    }),
   };
 }

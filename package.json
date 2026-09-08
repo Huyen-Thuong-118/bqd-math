@@ -26,6 +26,7 @@
     "verify:learning": "node --conditions=react-server --import tsx scripts/verify-learning-management.ts",
     "verify:change-password": "node --conditions=react-server --import tsx scripts/verify-change-password.ts",
     "verify:auth-recovery": "node --conditions=react-server --import tsx scripts/verify-auth-recovery-hardening.ts",
+    "verify:exam-solution": "node --import tsx scripts/verify-exam-solution-visibility.ts",
     "verify:backlog": "node --conditions=react-server --import tsx scripts/verify-backlog-features.ts"
   },
   "dependencies": {
