@@ -25,6 +25,7 @@
     "verify:slice-2": "node --conditions=react-server --import tsx scripts/verify-slice-2.ts",
     "verify:learning": "node --conditions=react-server --import tsx scripts/verify-learning-management.ts",
     "verify:change-password": "node --conditions=react-server --import tsx scripts/verify-change-password.ts",
+    "verify:auth-recovery": "node --conditions=react-server --import tsx scripts/verify-auth-recovery-hardening.ts",
     "verify:backlog": "node --conditions=react-server --import tsx scripts/verify-backlog-features.ts"
   },
   "dependencies": {

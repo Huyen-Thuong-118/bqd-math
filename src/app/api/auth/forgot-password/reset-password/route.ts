@@ -1,6 +1,5 @@
-import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
-import { verifyResetToken } from "@/features/auth/lib/reset-token";
+import { consumePasswordResetGrant } from "@/features/auth/password-recovery";
 import {
   validateConfirmPassword,
   validateRegisterPassword,
@@ -14,8 +13,7 @@ export async function POST(request: Request) {
     const confirmPassword =
       typeof body?.confirmPassword === "string" ? body.confirmPassword : "";
 
-    const userId = resetToken ? await verifyResetToken(resetToken) : null;
-    if (!userId) {
+    if (!resetToken || resetToken.length > 128) {
       return Response.json(
         {
           error:
@@ -38,10 +36,16 @@ export async function POST(request: Request) {
     // ghi ở features/auth/actions/register.ts: tránh 2 nơi cấu hình bcrypt
     // rounds khác nhau trong cùng 1 app.
     const passwordHash = await hashPassword(newPassword);
-    await db.user.update({
-      where: { id: userId },
-      data: { passwordHash, mustChangePassword: false },
-    });
+    const consumed = await consumePasswordResetGrant(resetToken, passwordHash);
+    if (!consumed) {
+      return Response.json(
+        {
+          error:
+            "Phiên đặt lại mật khẩu đã hết hạn, vui lòng thực hiện lại từ đầu",
+        },
+        { status: 400 },
+      );
+    }
 
     return Response.json({ success: true });
   } catch (error) {

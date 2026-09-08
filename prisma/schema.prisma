@@ -80,6 +80,7 @@ model User {
   accounts          Account[]
   sessions          Session[]
   passwordResetOtps PasswordResetOtp[]
+  passwordResetGrants PasswordResetGrant[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,18 +127,36 @@ model VerificationToken {
 }
 
 // Riêng cho OTP quên mật khẩu — KHÔNG dùng chung VerificationToken của
-// NextAuth vì cần lưu mã dạng hash (không phải token dài ngẫu nhiên) kèm
+// NextAuth vì cần lưu mã dạng HMAC (không phải token dài ngẫu nhiên) kèm
 // trạng thái đã dùng hay chưa (consumedAt).
 model PasswordResetOtp {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  codeHash   String // hash SHA-256 của mã OTP 6 số, không lưu plaintext
-  expiresAt  DateTime // ví dụ: tạo lúc gửi + 5 phút
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash     String // HMAC của mã OTP 6 số, không lưu plaintext
+  expiresAt    DateTime // ví dụ: tạo lúc gửi + 5 phút
+  consumedAt   DateTime?
+  attemptCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  resetGrant PasswordResetGrant?
 
   @@index([userId])
+}
+
+model PasswordResetGrant {
+  id          String   @id @default(cuid())
+  userId      String
+  challengeId String   @unique
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge PasswordResetOtp @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 // ---------------- LỚP HỌC ----------------

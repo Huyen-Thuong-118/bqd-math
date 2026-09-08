@@ -1,4 +1,4 @@
-import { createHash, randomInt } from "crypto";
+import { createHmac, randomInt, timingSafeEqual } from "crypto";
 
 /** 6 số ngẫu nhiên, dùng crypto.randomInt (CSPRNG) — Math.random không đủ an
  * toàn để sinh mã xác thực. `randomInt(0, 1_000_000)` cận trên loại trừ nên
@@ -7,8 +7,25 @@ export function generateOtp(): string {
   return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
-/** OTP sống rất ngắn (5 phút) nên hash SHA-256 đơn giản là đủ, không cần
- * bcrypt (chậm hơn nhiều, không cần thiết cho dữ liệu hết hạn nhanh). */
-export function hashOtp(otp: string): string {
-  return createHash("sha256").update(otp).digest("hex");
+function getOtpSecret() {
+  const value = process.env.PASSWORD_RESET_OTP_SECRET;
+  if (!value) {
+    throw new Error("Thiếu biến môi trường PASSWORD_RESET_OTP_SECRET.");
+  }
+  return value;
 }
+
+function hash(userId: string, otp: string): string {
+  return createHmac("sha256", getOtpSecret())
+    .update(`${userId}:${otp}`)
+    .digest("hex");
+}
+
+function matches(userId: string, otp: string, storedHash: string): boolean {
+  const expected = Buffer.from(hash(userId, otp), "utf8");
+  const stored = Buffer.from(storedHash, "utf8");
+  return expected.length === stored.length && timingSafeEqual(expected, stored);
+}
+
+/** HMAC theo user tránh brute-force offline mã OTP 6 số từ database bị lộ. */
+export const verifyOtpHash = { hash, matches };
