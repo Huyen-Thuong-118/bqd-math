@@ -104,7 +104,7 @@ export async function submitAttemptForUser(
           select: {
             scoringPolicy: true,
             questions: {
-              select: { id: true, number: true, type: true, correctAnswer: true, points: true },
+              select: { id: true, number: true, type: true, options: true, correctAnswer: true, points: true },
               orderBy: { number: "asc" },
             },
           },
@@ -131,7 +131,16 @@ export async function submitAttemptForUser(
     const scoringPolicy = rawPolicy && typeof rawPolicy === "object" && !Array.isArray(rawPolicy)
       ? rawPolicy as { trueFalseFractions?: number[] }
       : {};
-    const grade = gradeExam(attempt.exam.questions, latestAnswers, scoringPolicy);
+    const grade = gradeExam(
+      attempt.exam.questions.map((question) => ({
+        ...question,
+        options: Array.isArray(question.options)
+          ? question.options.filter((option): option is string => typeof option === "string")
+          : [],
+      })),
+      latestAnswers,
+      scoringPolicy,
+    );
     const submittedAt = new Date();
 
     const claimed = await tx.examAttempt.updateMany({

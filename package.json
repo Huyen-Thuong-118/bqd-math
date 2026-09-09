@@ -28,6 +28,7 @@
     "verify:auth-recovery": "node --conditions=react-server --import tsx scripts/verify-auth-recovery-hardening.ts",
     "verify:exam-solution": "node --import tsx scripts/verify-exam-solution-visibility.ts",
     "verify:exam-availability": "node --import tsx scripts/verify-exam-availability.ts",
+    "verify:question-grading": "node --import tsx scripts/verify-question-grading-contract.ts",
     "verify:backlog": "node --conditions=react-server --import tsx scripts/verify-backlog-features.ts"
   },
   "dependencies": {

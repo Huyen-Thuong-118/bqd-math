@@ -12,7 +12,7 @@ function sectionLabel(type: TakingQuestion["type"]) {
 export function isCompleteAnswer(question: TakingQuestion, value?: string) {
   if (!value) return false;
   if (question.type === "TRUE_FALSE") {
-    return value.split(",").length === 4 && value.split(",").every((item) => item === "D" || item === "S");
+    return value.split(",").length === question.options.length && value.split(",").every((item) => item === "D" || item === "S");
   }
   return value.trim().length > 0;
 }
@@ -54,10 +54,8 @@ export function AnswerSheet({ questions, answers, disabled, onAnswer, marked = n
             <h3 className="mb-3 text-sm font-semibold text-navy-500">{sectionLabel(group.type)}</h3>
             <div className="grid gap-2">
               {group.questions.map((question) => {
-                const answer = answers[question.number] ?? (question.type === "TRUE_FALSE" ? ",,," : "");
-                const multipleChoiceOptions = question.options.length === 4
-                  ? question.options
-                  : ["A", "B", "C", "D"];
+                const answer = answers[question.number] ?? (question.type === "TRUE_FALSE" ? Array(question.options.length).fill("").join(",") : "");
+                const multipleChoiceOptions = question.options;
                 return (
                   <div id={`answer-${question.number}`} key={question.id} className={`scroll-mt-40 rounded-2xl p-3 ${marked.has(question.number) ? "bg-amber-50 ring-1 ring-amber-200" : "bg-pastel-50"}`}>
                     <div className="flex items-center gap-3">

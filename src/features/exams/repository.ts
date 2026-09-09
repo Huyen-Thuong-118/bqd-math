@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { ExamAccessError } from "./errors";
 import { canWriteAnswers } from "./availability";
+import { isValidExamAnswer } from "./question-contract";
 import type { AnswerBatchPayload } from "./types";
 
 const MAX_CHANGES_PER_BATCH = 100;
@@ -54,7 +55,7 @@ export async function saveAnswerBatchForUser(
             availableFrom: true,
             availableTo: true,
             durationMinutes: true,
-            questions: { select: { id: true, number: true } },
+            questions: { select: { id: true, number: true, type: true, options: true } },
             examLinks: {
               where: { class: { enrollments: { some: { studentId: userId } } } },
               select: { id: true },
@@ -69,6 +70,19 @@ export async function saveAnswerBatchForUser(
     if (!attempt.exam.examLinks.length || !canWriteAnswers(attempt.exam, attempt.expiresAt)) throw new ExamAccessError("Đề đã đóng hoặc bạn không còn quyền làm bài.", 409);
     const questionIdByNumber = new Map(attempt.exam.questions.map((question) => [question.number, question.id]));
     if (payload.changes.some((change) => !questionIdByNumber.has(change.questionNumber))) throw new ExamAccessError("Đáp án chứa số câu không hợp lệ.", 409);
+    const questionByNumber = new Map(attempt.exam.questions.map((question) => [question.number, question]));
+    if (payload.changes.some((change) => {
+      const question = questionByNumber.get(change.questionNumber)!;
+      return !isValidExamAnswer(
+        {
+          type: question.type,
+          options: Array.isArray(question.options)
+            ? question.options.filter((option): option is string => typeof option === "string")
+            : [],
+        },
+        change.selectedAnswer,
+      );
+    })) throw new ExamAccessError("Đáp án không đúng định dạng của câu hỏi.", 400);
     const existingEvents = await tx.answerHistory.findMany({
       where: { eventId: { in: payload.changes.map((change) => change.eventId) } },
       select: { eventId: true },

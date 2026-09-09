@@ -1,9 +1,12 @@
+import { answersEquivalent, isValidExamAnswer, normalizeExamAnswer } from "./question-contract";
+
 export type GradableQuestion = {
   id: string;
   number: number;
   type?: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
   correctAnswer: string;
   points: number;
+  options?: string[];
 };
 
 export type GradedAnswer = {
@@ -26,29 +29,15 @@ export type GradeResult = {
 
 export type ScoringPolicy = { trueFalseFractions?: number[] };
 
-export function normalizeAnswer(value: string | null | undefined): string | null {
-  const normalized = value?.trim().toUpperCase();
-  return normalized ? normalized : null;
-}
+export const normalizeAnswer = normalizeExamAnswer;
 
-function normalizeForType(value: string | null | undefined, type: GradableQuestion["type"]) {
-  const normalized = normalizeAnswer(value);
-  if (!normalized) return null;
-  if (type === "SHORT_ANSWER") return normalized.replace(/\s/g, "").replace(",", ".");
-  if (type === "TRUE_FALSE") return normalized.replace(/Đ/g, "D").replace(/\s*,\s*/g, ",");
-  return normalized;
-}
-
-/** Hàm thuần: điểm cuối cùng quy về thang 10, làm tròn hai chữ số. */
 export function gradeExam(
   questions: GradableQuestion[],
   latestAnswers: ReadonlyMap<number, string>,
   scoringPolicy: ScoringPolicy = {},
 ): GradeResult {
   const totalPoints = questions.reduce((sum, question) => sum + question.points, 0);
-  if (questions.length === 0 || totalPoints <= 0) {
-    throw new Error("Đề thi chưa có câu hỏi hợp lệ để chấm.");
-  }
+  if (questions.length === 0 || totalPoints <= 0) throw new Error("Đề thi chưa có câu hỏi hợp lệ để chấm.");
 
   let correctCount = 0;
   let incorrectCount = 0;
@@ -56,42 +45,32 @@ export function gradeExam(
   let earnedPoints = 0;
 
   const answers = questions.map<GradedAnswer>((question) => {
-    const selectedAnswer = normalizeForType(latestAnswers.get(question.number), question.type);
-    const correctAnswer = normalizeForType(question.correctAnswer, question.type)!;
-    const isCorrect = selectedAnswer === correctAnswer;
+    const type = question.type ?? "MULTIPLE_CHOICE";
+    const options = question.options ?? (type === "TRUE_FALSE" ? ["a", "b", "c", "d"] : ["A", "B", "C", "D"]);
+    const rawSelectedAnswer = latestAnswers.get(question.number);
+    const selectedAnswer = isValidExamAnswer({ type, options }, rawSelectedAnswer)
+      ? normalizeExamAnswer(rawSelectedAnswer, type)
+      : null;
+    const correctAnswer = normalizeExamAnswer(question.correctAnswer, type)!;
+    const isCorrect = answersEquivalent(selectedAnswer, correctAnswer, type);
 
     if (!selectedAnswer) unansweredCount += 1;
     else if (isCorrect) correctCount += 1;
     else incorrectCount += 1;
 
     let pointsAwarded = isCorrect ? question.points : 0;
-    if (question.type === "TRUE_FALSE" && selectedAnswer && !isCorrect) {
+    if (type === "TRUE_FALSE" && selectedAnswer && !isCorrect) {
       const selected = selectedAnswer.split(",");
       const correct = correctAnswer.split(",");
       const correctStatements = correct.filter((value, index) => value === selected[index]).length;
-      const fractions = scoringPolicy.trueFalseFractions?.length === 5
+      const fractions = correct.length === 4 && scoringPolicy.trueFalseFractions?.length === 5
         ? scoringPolicy.trueFalseFractions
-        : [0, 0.1, 0.25, 0.5, 1];
-      const standardScore = fractions[correctStatements] ?? 0;
-      pointsAwarded = standardScore * question.points;
+        : null;
+      pointsAwarded = (fractions?.[correctStatements] ?? correctStatements / correct.length) * question.points;
     }
     earnedPoints += pointsAwarded;
-    return {
-      questionId: question.id,
-      questionNumber: question.number,
-      selectedAnswer,
-      correctAnswer,
-      isCorrect,
-      pointsAwarded,
-      pointsPossible: question.points,
-    };
+    return { questionId: question.id, questionNumber: question.number, selectedAnswer, correctAnswer, isCorrect, pointsAwarded, pointsPossible: question.points };
   });
 
-  return {
-    score: Math.round((earnedPoints / totalPoints) * 1000) / 100,
-    correctCount,
-    incorrectCount,
-    unansweredCount,
-    answers,
-  };
+  return { score: Math.round((earnedPoints / totalPoints) * 1000) / 100, correctCount, incorrectCount, unansweredCount, answers };
 }

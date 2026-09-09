@@ -118,7 +118,7 @@ function parseManualQuestions(raw: string): ManualQuestion[] | null {
         : [];
       const correctAnswer = typeof row.correctAnswer === "string" ? row.correctAnswer.trim().toUpperCase().replace(/Đ/g, "D") : "";
       if (!content || content.length > 4_000 || (explanation?.length ?? 0) > 10_000 || !Number.isFinite(points) || points <= 0 || points > 100) return null;
-      if (type === "MULTIPLE_CHOICE" && (options.length !== 4 || options.some((option) => !option || option.length > 1_000) || !/^[ABCD]$/.test(correctAnswer))) return null;
+      if (type === "MULTIPLE_CHOICE" && (options.length < 2 || options.length > 26 || options.some((option) => !option || option.length > 1_000) || !/^[A-Z]$/.test(correctAnswer) || correctAnswer.charCodeAt(0) - 65 >= options.length)) return null;
       if (type === "TRUE_FALSE" && (options.length !== 4 || options.some((option) => !option || option.length > 1_000) || !/^[DS](,[DS]){3}$/.test(correctAnswer))) return null;
       if (type === "SHORT_ANSWER" && (!correctAnswer || correctAnswer.length > 50)) return null;
       questions.push({ type, content, options: type === "SHORT_ANSWER" ? [] : options, correctAnswer, explanation, points });
