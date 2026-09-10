@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { CalendarDays, CalendarOff, Clock, MapPin, Video } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { SessionStatus } from "../schedule-status";
 import { LEVEL_LABEL, type DaySchedule } from "../types";
 
 /**
@@ -20,9 +21,11 @@ import { LEVEL_LABEL, type DaySchedule } from "../types";
 export function DayScheduleCard({
   day,
   index,
+  statusMap,
 }: {
   day: DaySchedule;
   index: number;
+  statusMap?: Map<string, SessionStatus>;
 }) {
   const hasSessions = day.sessions.length > 0;
 
@@ -77,19 +80,21 @@ export function DayScheduleCard({
 
       {hasSessions ? (
         <ul className="relative mt-5 space-y-3">
-          {day.sessions.map((session) => (
-            <li
-              key={session.id}
-              className="rounded-2xl border border-white/50 bg-white/45 p-3.5 transition-colors group-hover:bg-white/65"
-            >
-              <div className="flex items-center gap-2 text-base font-medium text-navy-500">
-                <Clock className="size-4 shrink-0 text-navy-300" aria-hidden />
+          {day.sessions.map((session) => {
+            const status = statusMap?.get(session.id);
+            const isCurrent = status === "current";
+            const isNext = status === "next";
+            return <li key={session.id} className={cn("rounded-2xl border p-3.5 transition-colors", isCurrent ? "border-green-300 bg-green-50/80" : "border-white/50 bg-white/45 group-hover:bg-white/65")}>
+              <div className={cn("flex flex-wrap items-center gap-2 text-base font-medium", isCurrent ? "text-green-700" : "text-navy-500")}>
+                <Clock className={cn("size-4 shrink-0", isCurrent ? "text-green-500" : "text-navy-300")} aria-hidden />
                 <time>
                   {session.startTime} - {session.endTime}
                 </time>
+                {isCurrent && <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700"><span className="size-1.5 rounded-full bg-green-500" aria-hidden />Đang diễn ra</span>}
+                {isNext && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Sắp diễn ra</span>}
               </div>
 
-              <p className="mt-1 text-sm text-navy-400">{session.className}</p>
+              <p className={cn("mt-1 text-sm", isCurrent ? "text-green-600" : "text-navy-400")}>{session.className}</p>
 
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <span
@@ -105,8 +110,8 @@ export function DayScheduleCard({
                 {session.mode && <span className="inline-flex items-center gap-1 rounded-full border border-navy-100 px-2.5 py-1 text-xs text-navy-400">{session.mode === "Online" ? <Video className="size-3.5" aria-hidden /> : <MapPin className="size-3.5" aria-hidden />}{session.mode}</span>}
                 {session.status === "ARCHIVED" && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">Đã lưu trữ</span>}
               </div>
-            </li>
-          ))}
+            </li>;
+          })}
         </ul>
       ) : (
         <p className="relative mt-5 rounded-2xl border border-dashed border-navy-200/50 px-3.5 py-6 text-center text-sm text-navy-300">

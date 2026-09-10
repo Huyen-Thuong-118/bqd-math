@@ -1,9 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import { motion } from "motion/react";
 
+import { WeeklyScheduleGrid } from "@/features/classes/components/WeeklyScheduleGrid";
+import { useSessionStatuses } from "../hooks/useSessionStatuses";
 import type { DaySchedule } from "../types";
-import { DayScheduleCard } from "./DayScheduleCard";
 
 /**
  * Khối "Lịch giảng dạy" ở Trang chủ — mỗi ngày trong tuần là 1 card.
@@ -14,6 +16,8 @@ import { DayScheduleCard } from "./DayScheduleCard";
  * thanh nav nổi (sticky) che mất.
  */
 export function ScheduleSection({ schedule }: { schedule: DaySchedule[] }) {
+  const allSessions = useMemo(() => schedule.flatMap((day) => day.sessions), [schedule]);
+  const statusMap = useSessionStatuses(allSessions);
   return (
     <section
       id="lich-giang-day"
@@ -43,11 +47,7 @@ export function ScheduleSection({ schedule }: { schedule: DaySchedule[] }) {
           Không còn nhánh "chưa có lịch nào" cho cả section: groupByDay luôn
           trả về đủ 7 ngày nên nhánh đó là code chết — trạng thái trống giờ
           nằm ở TỪNG card. */}
-      <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
-        {schedule.map((day, index) => (
-          <DayScheduleCard key={day.dayOfWeek} day={day} index={index} />
-        ))}
-      </div>
+      <WeeklyScheduleGrid schedule={schedule} statusMap={statusMap} />
     </section>
   );
 }

@@ -17,7 +17,6 @@ export type NavLink = {
 export const NAV_LINKS: NavLink[] = [
   { href: "/", label: "Trang chủ" },
   { href: "/lop-hoc", label: "Lớp học" },
-  { href: "/lich-hoc", label: "Lịch học" },
   { href: "/on-tap", label: "Câu hỏi ôn tập" },
   { href: "/thi-thu", label: "Phòng thi thử" },
   { href: "/tai-lieu", label: "Tài liệu" },
