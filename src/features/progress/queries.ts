@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 
+import { requireActiveStudentId } from "@/features/exams/access";
 import { requireActiveAdminId } from "@/features/exams/admin";
 import { db } from "@/lib/db";
 import {
@@ -23,8 +24,7 @@ function startDate(range: ProgressFilters["range"]) {
   return date;
 }
 
-export async function getStudentProgress(studentId: string, filters: ProgressFilters) {
-  await requireActiveAdminId();
+async function loadStudentProgress(studentId: string, filters: ProgressFilters) {
   const student = await db.user.findFirst({
     where: { id: studentId, role: "STUDENT" },
     select: {
@@ -176,4 +176,14 @@ export async function getStudentProgress(studentId: string, filters: ProgressFil
       reviewRate: item.reviewAttempts ? item.reviewCorrect / item.reviewAttempts * 100 : null,
     })),
   };
+}
+
+export async function getStudentProgress(studentId: string, filters: ProgressFilters) {
+  await requireActiveAdminId();
+  return loadStudentProgress(studentId, filters);
+}
+
+export async function getMyStudentProgress(filters: ProgressFilters) {
+  const studentId = await requireActiveStudentId();
+  return loadStudentProgress(studentId, filters);
 }

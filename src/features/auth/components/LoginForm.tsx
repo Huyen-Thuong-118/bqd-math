@@ -82,7 +82,7 @@ export function LoginForm({ googleEnabled, passwordChanged = false }: { googleEn
         )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="identifier" className="text-sm font-medium text-navy-500">
-            Số điện thoại hoặc Email
+            Tài khoản, số điện thoại hoặc email
           </label>
           <input
             id="identifier"
@@ -94,7 +94,7 @@ export function LoginForm({ googleEnabled, passwordChanged = false }: { googleEn
             aria-invalid={Boolean(errors.identifier)}
             aria-describedby={errors.identifier ? "identifier-error" : undefined}
             className={cn(inputClass, errors.identifier && errorInputClass)}
-            placeholder="0912345678 hoặc ban@email.com"
+            placeholder="admin, 0912345678 hoặc ban@email.com"
           />
           {errors.identifier && (
             <p id="identifier-error" className="text-xs text-accent-500">

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { db } from "@/lib/db";
 import { requireActiveAdminId } from "@/features/exams/admin";
-import { isValidClassCode, normalizeClassCode } from "@/lib/management-codes";
+import { nextClassCode } from "@/lib/management-codes";
 import { formatClassSchedule, type ClassScheduleSlotInput } from "./schedule";
 
 export type ClassActionResult = { success: true } | { success: false; error: string };
@@ -21,16 +21,15 @@ function refreshClasses(classId?: string) {
   revalidatePath("/admin/tai-lieu");
   revalidatePath("/admin/cau-hoi-on-tap");
   revalidatePath("/lop-hoc");
+  revalidatePath("/thong-bao");
   if (classId) revalidatePath(`/lop-hoc/${classId}`);
 }
 
 function validateClassInput(formData: FormData) {
   const name = value(formData, "name");
-  const code = normalizeClassCode(value(formData, "code"));
   const description = value(formData, "description");
   const level = value(formData, "level") === "ADVANCED" ? "ADVANCED" : "BASIC";
   if (name.length < 2 || name.length > 100) return { error: "Tên lớp phải có từ 2 đến 100 ký tự." } as const;
-  if (!isValidClassCode(code)) return { error: "Mã lớp gồm 2–30 ký tự A–Z, 0–9, dấu gạch ngang hoặc gạch dưới." } as const;
   if (description.length > 1000) return { error: "Mô tả tối đa 1.000 ký tự." } as const;
   let slots: ClassScheduleSlotInput[];
   try {
@@ -52,7 +51,7 @@ function validateClassInput(formData: FormData) {
     return { error: "Hãy thêm từ 1 đến 14 buổi học và kiểm tra lại giờ bắt đầu/kết thúc." } as const;
   }
   return {
-    data: { name, code, level, schedule: formatClassSchedule(slots), description: description || null },
+    data: { name, level, schedule: formatClassSchedule(slots), description: description || null },
     slots,
   } as const;
 }
@@ -62,17 +61,21 @@ export async function createClass(formData: FormData): Promise<ClassActionResult
     await requireActiveAdminId();
     const parsed = validateClassInput(formData);
     if ("error" in parsed) return { success: false, error: parsed.error ?? "Thông tin lớp không hợp lệ." };
-    await db.class.create({
-      data: {
-        ...parsed.data,
-        scheduleSlots: { create: parsed.slots },
-      },
+    await db.$transaction(async (transaction) => {
+      const code = await nextClassCode(transaction);
+      await transaction.class.create({
+        data: {
+          ...parsed.data,
+          code,
+          scheduleSlots: { create: parsed.slots },
+        },
+      });
     });
     refreshClasses();
     return { success: true };
   } catch (error) {
     console.error("createClass thất bại:", error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, error: "Mã lớp đã được sử dụng." };
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, error: "Không thể cấp mã lớp tự động." };
     return { success: false, error: "Không thể tạo lớp." };
   }
 }
@@ -98,7 +101,6 @@ export async function updateClass(classId: string, formData: FormData): Promise<
     return { success: true };
   } catch (error) {
     console.error("updateClass thất bại:", error);
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { success: false, error: "Mã lớp đã được sử dụng." };
     return { success: false, error: "Không thể cập nhật lớp." };
   }
 }
@@ -125,18 +127,41 @@ export async function setClassEnrollments(classId: string, studentIds: string[])
     await requireActiveAdminId();
     const normalizedIds = [...new Set(studentIds.filter((id) => typeof id === "string" && id.length <= 100))];
     const [classroom, validStudentCount] = await Promise.all([
-      db.class.findFirst({ where: { id: classId, status: "ACTIVE" }, select: { id: true } }),
+      db.class.findFirst({
+        where: { id: classId, status: "ACTIVE" },
+        select: { id: true, enrollments: { select: { studentId: true } } },
+      }),
       db.user.count({ where: { id: { in: normalizedIds }, role: "STUDENT", status: "ACTIVE" } }),
     ]);
     if (!classroom) return { success: false, error: "Không tìm thấy lớp đang hoạt động." };
     if (validStudentCount !== normalizedIds.length) return { success: false, error: "Danh sách có học sinh không hợp lệ hoặc chưa hoạt động." };
-    await db.$transaction([
-      db.classEnrollment.deleteMany({ where: { classId, studentId: { notIn: normalizedIds } } }),
-      db.classEnrollment.createMany({
+    const currentIds = new Set(classroom.enrollments.map((item) => item.studentId));
+    const addedIds = normalizedIds.filter((id) => !currentIds.has(id));
+    await db.$transaction(async (transaction) => {
+      await transaction.classEnrollment.deleteMany({ where: { classId, studentId: { notIn: normalizedIds } } });
+      await transaction.classEnrollment.createMany({
         data: normalizedIds.map((studentId) => ({ classId, studentId })),
         skipDuplicates: true,
-      }),
-    ]);
+      });
+      if (addedIds.length) {
+        const announcements = await transaction.classAnnouncement.findMany({
+          where: { classId, isVisible: true },
+          select: { id: true, title: true, content: true, createdAt: true },
+        });
+        const notifications = addedIds.flatMap((userId) => announcements.map((announcement) => ({
+            userId,
+            type: "IN_APP" as const,
+            title: announcement.title,
+            content: announcement.content,
+            href: `/lop-hoc/${classId}`,
+            classAnnouncementId: announcement.id,
+            sentAt: announcement.createdAt,
+          })));
+        if (notifications.length) {
+          await transaction.notification.createMany({ data: notifications, skipDuplicates: true });
+        }
+      }
+    });
     refreshClasses(classId);
     return { success: true };
   } catch (error) {
@@ -153,9 +178,28 @@ export async function createClassAnnouncement(classId: string, formData: FormDat
     if (title.length < 2 || title.length > 120 || content.length < 2 || content.length > 2000) {
       return { success: false, error: "Tiêu đề hoặc nội dung thông báo không hợp lệ." };
     }
-    const classroom = await db.class.findFirst({ where: { id: classId, status: "ACTIVE" }, select: { id: true } });
+    const classroom = await db.class.findFirst({
+      where: { id: classId, status: "ACTIVE" },
+      select: { id: true, enrollments: { select: { studentId: true } } },
+    });
     if (!classroom) return { success: false, error: "Lớp đã lưu trữ không nhận thông báo mới." };
-    await db.classAnnouncement.create({ data: { classId, title, content } });
+    await db.$transaction(async (transaction) => {
+      const announcement = await transaction.classAnnouncement.create({
+        data: { classId, title, content },
+      });
+      if (classroom.enrollments.length) {
+        await transaction.notification.createMany({
+          data: classroom.enrollments.map(({ studentId: userId }) => ({
+          userId,
+          type: "IN_APP" as const,
+          title,
+          content,
+          href: `/lop-hoc/${classId}`,
+          classAnnouncementId: announcement.id,
+          })),
+        });
+      }
+    });
     refreshClasses(classId);
     return { success: true };
   } catch (error) {
@@ -172,12 +216,34 @@ export async function toggleClassAnnouncement(
     await requireActiveAdminId();
     const announcement = await db.classAnnouncement.findFirst({
       where: { id: announcementId, classId },
-      select: { isVisible: true },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        createdAt: true,
+        isVisible: true,
+        class: { select: { enrollments: { select: { studentId: true } } } },
+      },
     });
     if (!announcement) return { success: false, error: "Không tìm thấy thông báo." };
-    await db.classAnnouncement.update({
-      where: { id: announcementId },
-      data: { isVisible: !announcement.isVisible },
+    await db.$transaction(async (transaction) => {
+      await transaction.classAnnouncement.update({
+        where: { id: announcementId },
+        data: { isVisible: !announcement.isVisible },
+      });
+      if (announcement.isVisible || !announcement.class.enrollments.length) return;
+      await transaction.notification.createMany({
+        data: announcement.class.enrollments.map(({ studentId: userId }) => ({
+          userId,
+          type: "IN_APP" as const,
+          title: announcement.title,
+          content: announcement.content,
+          href: `/lop-hoc/${classId}`,
+          classAnnouncementId: announcement.id,
+          sentAt: announcement.createdAt,
+        })),
+        skipDuplicates: true,
+      });
     });
     refreshClasses(classId);
     return { success: true };

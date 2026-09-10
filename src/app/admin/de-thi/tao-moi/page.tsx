@@ -33,10 +33,11 @@ export default async function CreateExamPage() {
     db.folder.findMany({ where: { kind: "EXAM" }, select: { id: true, name: true, parentId: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] }),
   ]);
   const folders = folderOptions(folderRows);
+  const directUpload = isCloudStorageConfigured();
   return (
     <section className="mx-auto max-w-5xl space-y-5">
       <div><h1 className="text-xl font-semibold text-navy-600">Tạo đề mới</h1><p className="mt-1 text-sm text-navy-300">Tải PDF, tạo phiếu tô, nhập đáp án và giao đề cho lớp.</p></div>
-      <div><h2 className="mb-3 font-semibold text-navy-600">1. Upload PDF</h2><ExamCreateForm classes={classes} folders={folders} directUpload={isCloudStorageConfigured()} /></div>
+      <div><h2 className="mb-3 font-semibold text-navy-600">1. Upload PDF</h2><ExamCreateForm classes={classes} folders={folders} directUpload={directUpload} storageWarning={!directUpload && process.env.NODE_ENV === "production"} /></div>
       <ExamFromBankForm classes={classes} folders={folders} chapters={chapters} initialQuestions={bank.questions} initialPagination={bank.pagination} />
       <ManualExamForm classes={classes} folders={folders} />
     </section>

@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import { db } from "../src/lib/db";
+import { nextClassCode, nextStudentCode } from "../src/lib/management-codes";
 import { hashPassword } from "../src/lib/password";
 import { formatClassSchedule } from "../src/features/classes/schedule";
 
@@ -28,25 +29,30 @@ async function main() {
   const students = [];
   for (let index = 1; index <= STUDENT_COUNT; index += 1) {
     const padded = String(index).padStart(2, "0");
+    const email = `hocsinh${padded}@bqdmath.local`;
+    const existing = await db.user.findUnique({ where: { email }, select: { studentCode: true } });
+    const studentCode = existing?.studentCode && /^\d+$/.test(existing.studentCode)
+      ? existing.studentCode
+      : await db.$transaction((transaction) => nextStudentCode(transaction));
     const student = await db.user.upsert({
-      where: { email: `hocsinh${padded}@bqdmath.local` },
+      where: { email },
       update: {
         name: `${familyNames[(index - 1) % familyNames.length]} ${givenNames[(index - 1) % givenNames.length]} ${padded}`,
         role: "STUDENT",
         status: "ACTIVE",
         passwordHash,
         mustChangePassword: false,
-        studentCode: `HS-TEST${padded.padStart(4, "0")}`,
+        studentCode,
         studentPhone: `09350000${padded}`,
         parentPhone: `09450000${padded}`,
       },
       create: {
         id: `test-student-${padded}`,
         name: `${familyNames[(index - 1) % familyNames.length]} ${givenNames[(index - 1) % givenNames.length]} ${padded}`,
-        email: `hocsinh${padded}@bqdmath.local`,
+        email,
         role: "STUDENT",
         status: "ACTIVE",
-        studentCode: `HS-TEST${padded.padStart(4, "0")}`,
+        studentCode,
         passwordHash,
         studentPhone: `09350000${padded}`,
         parentPhone: `09450000${padded}`,
@@ -59,13 +65,17 @@ async function main() {
     const seed = classSeeds[classIndex];
     const classId = `test-class-${String(classIndex + 1).padStart(2, "0")}`;
     const level = classIndex % 2 === 0 ? "BASIC" as const : "ADVANCED" as const;
+    const existing = await db.class.findUnique({ where: { id: classId }, select: { code: true } });
+    const classCode = existing?.code && /^\d+$/.test(existing.code)
+      ? existing.code
+      : await db.$transaction((transaction) => nextClassCode(transaction));
     await db.class.upsert({
       where: { id: classId },
       update: { name: seed.name, level, schedule: formatClassSchedule(seed.slots), status: "ACTIVE" },
       create: {
         id: classId,
         name: seed.name,
-        code: `TEST-${String(classIndex + 1).padStart(2, "0")}`,
+        code: classCode,
         level,
         schedule: formatClassSchedule(seed.slots),
         description: `Lớp kiểm thử số ${classIndex + 1}, có ${seed.slots.length} buổi học mỗi tuần.`,

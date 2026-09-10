@@ -864,6 +864,43 @@ export async function toggleExamSolution(examId: string): Promise<SimpleResult> 
   }
 }
 
+export async function deleteExam(examId: string): Promise<SimpleResult> {
+  try {
+    await requireActiveAdminId();
+    const exam = await db.$transaction(async (tx) => {
+      // Block new attempts while removing answers and their parent exam.
+      await tx.$queryRaw`SELECT "id" FROM "Exam" WHERE "id" = ${examId} FOR UPDATE`;
+      const current = await tx.exam.findUnique({
+        where: { id: examId },
+        select: { examFileUrl: true, answerFileUrl: true },
+      });
+      if (!current) return null;
+
+      // AttemptAnswer restricts question deletion: remove attempts first.
+      // Their answers/history, then the exam's questions/class links cascade.
+      await tx.examAttempt.deleteMany({ where: { examId } });
+      await tx.exam.delete({ where: { id: examId } });
+      return current;
+    });
+    if (!exam) return { success: false, error: "Đề thi không còn tồn tại. Hãy tải lại danh sách." };
+
+    // Only remove files after the database transaction has committed.
+    const keys = new Set([exam.examFileUrl, exam.answerFileUrl].filter((key): key is string => Boolean(key)));
+    await Promise.all([...keys].map(async (key) => {
+      try {
+        await deleteDocument(key);
+      } catch (error) {
+        console.error("Không thể dọn file của đề đã xóa:", key, error);
+      }
+    }));
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (error) {
+    console.error("deleteExam thất bại:", error);
+    return { success: false, error: "Không thể xóa đề thi. Vui lòng thử lại." };
+  }
+}
+
 export async function closeExam(examId: string): Promise<SimpleResult> {
   try {
     await requireActiveAdminId();

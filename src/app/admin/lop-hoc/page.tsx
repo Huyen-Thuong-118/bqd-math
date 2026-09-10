@@ -41,7 +41,7 @@ export default async function AdminClassesPage() {
       <div><h1 className="text-xl font-semibold text-navy-600">Lớp học & lịch dạy</h1><p className="mt-1 text-sm text-navy-300">Xem lịch tuần, tạo lớp, xếp học sinh và chỉnh từng buổi học trên cùng một trang.</p></div>
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.45fr)]">
         <div id="quan-ly-lop" className="min-w-0 scroll-mt-6 space-y-3"><div><h2 className="text-lg font-semibold text-navy-600">Chỉnh sửa lớp học</h2><p className="mt-1 text-xs text-navy-300">Thay đổi lịch ở đây sẽ cập nhật ngay sang cột lịch bên cạnh.</p></div><AdminClassesManager classes={classes} students={students} /></div>
-        <div className="min-w-0 xl:sticky xl:top-4 xl:self-start"><AdminWeeklyCalendar schedule={weeklySchedule.schedule} classCount={weeklySchedule.classCount} sessionCount={weeklySchedule.sessionCount} /></div>
+        <div id="lich-day" className="min-w-0 scroll-mt-6 xl:sticky xl:top-4 xl:self-start"><AdminWeeklyCalendar schedule={weeklySchedule.schedule} classCount={weeklySchedule.classCount} sessionCount={weeklySchedule.sessionCount} /></div>
       </div>
     </section>
   );

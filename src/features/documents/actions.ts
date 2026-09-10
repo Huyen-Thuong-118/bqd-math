@@ -22,6 +22,29 @@ type UploadTargetResult =
   | { success: true; key: string; uploadUrl: string }
   | { success: false; error: string };
 
+async function nextDocumentFolderCopyName(name: string, parentId: string | null) {
+  const siblings = await db.folder.findMany({ where: { kind: "DOCUMENT", parentId }, select: { name: true } });
+  const names = new Set(siblings.map((item) => item.name.toLocaleLowerCase("vi")));
+  let candidate = `${name} (bản sao)`;
+  let index = 2;
+  while (names.has(candidate.toLocaleLowerCase("vi"))) candidate = `${name} (bản sao ${index++})`;
+  return candidate;
+}
+
+async function cloneDocument(tx: Prisma.TransactionClient, documentId: string, folderId: string | null, rename: boolean) {
+  const source = await tx.document.findUnique({ where: { id: documentId }, include: { classLinks: true, versions: { orderBy: { version: "asc" } } } });
+  if (!source) throw new Error("Không tìm thấy tài liệu.");
+  const last = await tx.document.aggregate({ where: { folderId }, _max: { position: true } });
+  await tx.document.create({ data: {
+    title: rename ? `${source.title} (bản sao)` : source.title,
+    fileUrl: source.fileUrl, answerUrl: source.answerUrl, showAnswer: source.showAnswer,
+    allowDownload: source.allowDownload, fileName: source.fileName, contentType: source.contentType,
+    classId: source.classId, folderId, position: (last._max.position ?? -1) + 1, updateCount: source.updateCount,
+    classLinks: { create: source.classLinks.map((link) => ({ classId: link.classId })) },
+    versions: { create: source.versions.map((version) => ({ version: version.version, fileUrl: version.fileUrl, fileName: version.fileName, contentType: version.contentType })) },
+  } });
+}
+
 function text(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -430,5 +453,54 @@ export async function moveDocument(
   } catch (error) {
     console.error("moveDocument thất bại:", error);
     return { success: false, error: "Không thể di chuyển tài liệu." };
+  }
+}
+
+export async function copyDocument(documentId: string, folderId: string | null): Promise<Result> {
+  try {
+    await requireActiveAdminId();
+    if (folderId && !(await documentFolderExists(folderId))) return { success: false, error: "Thư mục đích không tồn tại." };
+    await db.$transaction((tx) => cloneDocument(tx, documentId, folderId, true));
+    refresh();
+    return { success: true };
+  } catch (error) {
+    console.error("copyDocument thất bại:", error);
+    return { success: false, error: "Không thể sao chép tài liệu." };
+  }
+}
+
+export async function copyDocumentFolder(folderId: string, parentId: string | null): Promise<Result> {
+  try {
+    await requireActiveAdminId();
+    if (folderId === parentId) return { success: false, error: "Không thể sao chép thư mục vào chính nó." };
+    const sourceRoot = await db.folder.findFirst({ where: { id: folderId, kind: "DOCUMENT" }, select: { name: true } });
+    if (!sourceRoot) return { success: false, error: "Không tìm thấy thư mục." };
+    if (parentId && !(await documentFolderExists(parentId))) return { success: false, error: "Thư mục đích không tồn tại." };
+    let cursor = parentId;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor)) {
+      if (cursor === folderId) return { success: false, error: "Không thể sao chép thư mục vào thư mục con của nó." };
+      seen.add(cursor);
+      cursor = (await db.folder.findUnique({ where: { id: cursor }, select: { parentId: true } }))?.parentId ?? null;
+    }
+    const rootName = await nextDocumentFolderCopyName(sourceRoot.name, parentId);
+    await db.$transaction(async (tx) => {
+      async function cloneFolder(sourceId: string, targetParentId: string | null, name?: string): Promise<void> {
+        const source = await tx.folder.findFirst({ where: { id: sourceId, kind: "DOCUMENT" }, select: { name: true } });
+        if (!source) throw new Error("Không tìm thấy thư mục nguồn.");
+        const last = await tx.folder.aggregate({ where: { kind: "DOCUMENT", parentId: targetParentId }, _max: { position: true } });
+        const target = await tx.folder.create({ data: { name: name ?? source.name, kind: "DOCUMENT", parentId: targetParentId, position: (last._max.position ?? -1) + 1 } });
+        const documents = await tx.document.findMany({ where: { folderId: sourceId }, select: { id: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+        for (const document of documents) await cloneDocument(tx, document.id, target.id, false);
+        const children = await tx.folder.findMany({ where: { kind: "DOCUMENT", parentId: sourceId }, select: { id: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+        for (const child of children) await cloneFolder(child.id, target.id);
+      }
+      await cloneFolder(folderId, parentId, rootName);
+    });
+    refresh();
+    return { success: true };
+  } catch (error) {
+    console.error("copyDocumentFolder thất bại:", error);
+    return { success: false, error: "Không thể sao chép thư mục tài liệu." };
   }
 }

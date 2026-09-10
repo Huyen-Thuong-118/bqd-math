@@ -8,6 +8,41 @@ import { requireActiveAdminId } from "./admin";
 
 type Result = { success: true } | { success: false; error: string };
 
+async function nextExamFolderCopyName(name: string, parentId: string | null) {
+  const siblings = await db.folder.findMany({ where: { kind: "EXAM", parentId }, select: { name: true } });
+  const names = new Set(siblings.map((item) => item.name.toLocaleLowerCase("vi")));
+  let candidate = `${name} (bản sao)`;
+  let index = 2;
+  while (names.has(candidate.toLocaleLowerCase("vi"))) candidate = `${name} (bản sao ${index++})`;
+  return candidate;
+}
+
+async function cloneExam(tx: Prisma.TransactionClient, examId: string, folderId: string | null, rename: boolean) {
+  const source = await tx.exam.findUnique({
+    where: { id: examId },
+    include: { questions: { orderBy: { number: "asc" } }, examLinks: true },
+  });
+  if (!source) throw new Error("Không tìm thấy đề thi.");
+  const last = await tx.exam.aggregate({ where: { folderId }, _max: { position: true } });
+  await tx.exam.create({ data: {
+    title: rename ? `${source.title} (bản sao)` : source.title,
+    mode: source.mode, status: source.status, publishedAt: source.publishedAt, source: source.source,
+    classId: source.classId, examFileUrl: source.examFileUrl, answerFileUrl: source.answerFileUrl,
+    showAnswer: source.showAnswer, folderId, position: (last._max.position ?? -1) + 1,
+    isForever: source.isForever, availableFrom: source.availableFrom, availableTo: source.availableTo,
+    durationMinutes: source.durationMinutes, maxAttempts: source.maxAttempts,
+    allowDownload: source.allowDownload, hideWrongAnswers: source.hideWrongAnswers,
+    ...(source.scoringPolicy === null ? {} : { scoringPolicy: source.scoringPolicy as Prisma.InputJsonValue }),
+    ...(source.answerSheetConfig === null ? {} : { answerSheetConfig: source.answerSheetConfig as Prisma.InputJsonValue }),
+    examLinks: { create: source.examLinks.map((link) => ({ classId: link.classId })) },
+    questions: { create: source.questions.map((question) => ({
+      number: question.number, type: question.type, content: question.content,
+      options: question.options as Prisma.InputJsonValue, correctAnswer: question.correctAnswer,
+      points: question.points, explanation: question.explanation,
+    })) },
+  } });
+}
+
 function refresh(examId?: string) {
   revalidatePath("/admin/de-thi");
   revalidatePath("/admin/de-thi/tao-moi");
@@ -192,5 +227,58 @@ export async function moveExam(examId: string, folderId: string | null, position
   } catch (error) {
     console.error("moveExam thất bại:", error);
     return { success: false, error: "Không thể di chuyển đề thi." };
+  }
+}
+
+export async function copyExam(examId: string, folderId: string | null): Promise<Result> {
+  try {
+    await requireActiveAdminId();
+    if (folderId && !(await db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { id: true } }))) {
+      return { success: false, error: "Thư mục đích không tồn tại." };
+    }
+    await db.$transaction((tx) => cloneExam(tx, examId, folderId, true));
+    refresh();
+    return { success: true };
+  } catch (error) {
+    console.error("copyExam thất bại:", error);
+    return { success: false, error: "Không thể sao chép đề thi." };
+  }
+}
+
+export async function copyExamFolder(folderId: string, parentId: string | null): Promise<Result> {
+  try {
+    await requireActiveAdminId();
+    if (folderId === parentId) return { success: false, error: "Không thể sao chép thư mục vào chính nó." };
+    const sourceRoot = await db.folder.findFirst({ where: { id: folderId, kind: "EXAM" }, select: { name: true } });
+    if (!sourceRoot) return { success: false, error: "Không tìm thấy thư mục." };
+    if (parentId && !(await db.folder.findFirst({ where: { id: parentId, kind: "EXAM" }, select: { id: true } }))) {
+      return { success: false, error: "Thư mục đích không tồn tại." };
+    }
+    let cursor = parentId;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor)) {
+      if (cursor === folderId) return { success: false, error: "Không thể sao chép thư mục vào thư mục con của nó." };
+      seen.add(cursor);
+      cursor = (await db.folder.findUnique({ where: { id: cursor }, select: { parentId: true } }))?.parentId ?? null;
+    }
+    const rootName = await nextExamFolderCopyName(sourceRoot.name, parentId);
+    await db.$transaction(async (tx) => {
+      async function cloneFolder(sourceId: string, targetParentId: string | null, name?: string): Promise<void> {
+        const source = await tx.folder.findFirst({ where: { id: sourceId, kind: "EXAM" }, select: { name: true } });
+        if (!source) throw new Error("Không tìm thấy thư mục nguồn.");
+        const last = await tx.folder.aggregate({ where: { kind: "EXAM", parentId: targetParentId }, _max: { position: true } });
+        const target = await tx.folder.create({ data: { name: name ?? source.name, kind: "EXAM", parentId: targetParentId, position: (last._max.position ?? -1) + 1 } });
+        const exams = await tx.exam.findMany({ where: { folderId: sourceId }, select: { id: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+        for (const exam of exams) await cloneExam(tx, exam.id, target.id, false);
+        const children = await tx.folder.findMany({ where: { kind: "EXAM", parentId: sourceId }, select: { id: true }, orderBy: [{ position: "asc" }, { createdAt: "asc" }] });
+        for (const child of children) await cloneFolder(child.id, target.id);
+      }
+      await cloneFolder(folderId, parentId, rootName);
+    });
+    refresh();
+    return { success: true };
+  } catch (error) {
+    console.error("copyExamFolder thất bại:", error);
+    return { success: false, error: "Không thể sao chép thư mục đề thi." };
   }
 }

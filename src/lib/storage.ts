@@ -24,7 +24,9 @@ function safeStorageKey(key: string) {
   if (
     normalized !== key.replace(/^\/+/, "") ||
     normalized.startsWith("..") ||
-    (!normalized.startsWith("exams/") && !normalized.startsWith("documents/"))
+    (!normalized.startsWith("exams/") &&
+      !normalized.startsWith("documents/") &&
+      !normalized.startsWith("review-questions/"))
   ) {
     throw new Error("Storage key không hợp lệ.");
   }
@@ -68,6 +70,18 @@ export function buildExamRevisionKey(params: {
   const revisionId = params.revisionId.replace(/[^a-zA-Z0-9-]/g, "");
   if (!revisionId) throw new Error("Mã phiên bản file không hợp lệ.");
   return `exams/${params.examId}/${params.kind}-${revisionId}.pdf`;
+}
+
+export function buildReviewQuestionImageKey(params: {
+  questionId: string;
+  kind: "question" | "solution";
+  index: number;
+}) {
+  const questionId = params.questionId.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!questionId || !Number.isInteger(params.index) || params.index < 0 || params.index > 19) {
+    throw new Error("Mã ảnh câu hỏi không hợp lệ.");
+  }
+  return `review-questions/${questionId}/${params.kind}-${String(params.index + 1).padStart(2, "0")}.webp`;
 }
 
 export async function uploadDocument(

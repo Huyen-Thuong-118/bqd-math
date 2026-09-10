@@ -24,4 +24,7 @@ export type StudentAccount = Pick<
   | "status"
   | "createdAt"
   | "suspendedAt"
->;
+> & {
+  classIds: string[];
+  classNames: string[];
+};

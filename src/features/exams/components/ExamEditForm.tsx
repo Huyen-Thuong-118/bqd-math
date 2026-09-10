@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { ClassMultiSelect } from "@/components/forms/ClassMultiSelect";
 import { discardExamUpload, updateExam } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
 import { uploadExamPdf } from "./exam-upload";
@@ -38,7 +39,19 @@ type EditableExam = {
 
 const input = "mt-1 w-full rounded-xl border border-navy-100 bg-white px-3 py-2.5 text-sm text-navy-600 outline-none focus:border-navy-400";
 
-export function ExamEditForm({ exam, classes, folders, directUpload }: { exam: EditableExam; classes: ClassOption[]; folders: FolderOption[]; directUpload: boolean }) {
+export function ExamEditForm({
+  exam,
+  classes,
+  folders,
+  directUpload,
+  storageWarning = false,
+}: {
+  exam: EditableExam;
+  classes: ClassOption[];
+  folders: FolderOption[];
+  directUpload: boolean;
+  storageWarning?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
@@ -105,7 +118,7 @@ export function ExamEditForm({ exam, classes, folders, directUpload }: { exam: E
 
   return (
     <form action={submit} className="space-y-6">
-      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên thay file đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
+      {storageWarning && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên thay file đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       {exam.attemptCount > 0 && <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Đề đã có {exam.attemptCount} lượt làm. Điểm và đáp án của các bài đã nộp được giữ nguyên theo bản chụp; thay đổi mới chỉ áp dụng cho lượt nộp sau.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
@@ -126,7 +139,7 @@ export function ExamEditForm({ exam, classes, folders, directUpload }: { exam: E
           <div className="rounded-xl bg-pastel-50 p-3 text-sm"><label className="flex items-center gap-2 font-medium text-navy-500"><input name="isForever" type="checkbox" checked={isForever} onChange={(event) => setIsForever(event.target.checked)} />Mở vĩnh viễn</label></div>
           {!isForever && <><label className="text-sm font-medium text-navy-500">Mở từ<input name="availableFrom" required type="datetime-local" defaultValue={exam.availableFrom} className={input} /></label><label className="text-sm font-medium text-navy-500">Đóng lúc<input name="availableTo" required type="datetime-local" defaultValue={exam.availableTo} className={input} /></label></>}
           <div className="grid gap-3 text-sm text-navy-500 sm:col-span-2 sm:grid-cols-3"><label className="flex gap-2"><input name="allowDownload" type="checkbox" defaultChecked={exam.allowDownload} /> Cho phép tải PDF</label><label className="flex gap-2"><input name="showAnswer" type="checkbox" defaultChecked={exam.showAnswer} /> Hiện lời giải sau khi nộp</label><label className="flex gap-2"><input name="hideWrongAnswers" type="checkbox" defaultChecked={exam.hideWrongAnswers} /> Ẩn đáp án đúng nếu làm sai</label></div>
-          <fieldset className="sm:col-span-2"><legend className="text-sm font-medium text-navy-500">Giao cho lớp</legend><div className="mt-2 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" defaultChecked={exam.classIds.includes(item.id)} />{item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div></fieldset>
+          <ClassMultiSelect classes={classes} defaultSelected={exam.classIds} className="sm:col-span-2" />
         </section>
 
         <section className="space-y-4 rounded-3xl border border-navy-100 bg-white p-5">

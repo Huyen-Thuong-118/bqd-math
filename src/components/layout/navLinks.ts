@@ -23,3 +23,15 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/tai-lieu", label: "Tài liệu" },
   { href: "/lien-he", label: "Liên hệ" },
 ];
+
+/** Điều hướng tương ứng cho tài khoản giáo viên khi đang ở trang public.
+ * Mỗi mục đi thẳng vào đúng màn hình quản trị, tránh mở nhầm giao diện học sinh. */
+export const ADMIN_NAV_LINKS: NavLink[] = [
+  { href: "/admin", label: "Trang chủ" },
+  { href: "/admin/lop-hoc#quan-ly-lop", label: "Lớp học" },
+  { href: "/admin/lop-hoc#lich-day", label: "Lịch học" },
+  { href: "/admin/cau-hoi-on-tap", label: "Câu hỏi ôn tập" },
+  { href: "/admin/de-thi", label: "Phòng thi thử" },
+  { href: "/admin/tai-lieu", label: "Tài liệu" },
+  { href: "/lien-he", label: "Liên hệ" },
+];

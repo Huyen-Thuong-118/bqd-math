@@ -37,7 +37,7 @@ export const {
   providers: [
     Credentials({
       credentials: {
-        identifier: { label: "Email hoặc số điện thoại" },
+        identifier: { label: "Tài khoản, email hoặc số điện thoại" },
         password: { label: "Mật khẩu", type: "password" },
       },
       async authorize(credentials) {

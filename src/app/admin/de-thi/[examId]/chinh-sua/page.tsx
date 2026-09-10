@@ -106,6 +106,7 @@ export default async function EditExamPage({ params }: { params: Promise<{ examI
         classes={classes}
         folders={folderOptions(folderRows)}
         directUpload={isCloudStorageConfigured()}
+        storageWarning={!isCloudStorageConfigured() && process.env.NODE_ENV === "production"}
         exam={{
           id: exam.id,
           title: exam.title,

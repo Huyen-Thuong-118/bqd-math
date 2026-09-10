@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
+import { ClassMultiSelect } from "@/components/forms/ClassMultiSelect";
 import { searchQuestionBank } from "@/features/review-questions/actions";
 import { createExamFromQuestionBank } from "../admin-actions";
 import { InlineExamFolderCreator } from "./InlineExamFolderCreator";
@@ -127,12 +128,7 @@ export function ExamFromBankForm({
           <label className="flex items-end gap-2 pb-2 text-sm font-semibold text-green-800"><input name="publishNow" type="checkbox" defaultChecked /> Xuất bản ngay</label>
         </div>
 
-        <fieldset>
-          <legend className="text-sm font-semibold text-navy-500">Giao cho lớp</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {classes.map((item) => <label key={item.id} className="rounded-xl bg-white px-3 py-2 text-xs text-navy-500"><input name="classIds" value={item.id} type="checkbox" /> {item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}
-          </div>
-        </fieldset>
+        <ClassMultiSelect classes={classes} />
 
         <fieldset className="space-y-3 rounded-2xl border border-navy-100 bg-white p-4">
           <legend className="px-2 text-sm font-semibold text-navy-500">Chọn câu hỏi · đã chọn {selected.size}</legend>

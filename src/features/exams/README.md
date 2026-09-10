@@ -20,6 +20,9 @@ Module đề thi, lượt làm bài, autosave, chấm điểm và kết quả.
 - `ManualExamForm` nhập trực tiếp đủ ba loại câu, đáp án, điểm, lời giải,
   reorder và preview; `ExamFromBankForm` tìm/lọc/phân trang nhưng vẫn giữ
   selection. Tạo đề, câu và liên kết lớp chạy trong một transaction.
+- Xóa đề có xác nhận tên đề và số lượt làm; chỉ admin đang hoạt động được xóa.
+  Lượt làm, đáp án, lịch sử, câu hỏi và liên kết lớp được xóa trong một transaction;
+  file đề/lời giải được dọn sau khi transaction thành công (lỗi storage được ghi log).
 - Cây thư mục đề dùng namespace `EXAM`, hỗ trợ tạo/đổi tên/di chuyển/reorder;
   action server chặn cycle, sai namespace và cây sâu quá 8 cấp.
 - Nút “Quét bằng Gemini” gửi PDF từ server tới Vertex AI bằng IAM của Cloud Run;
@@ -44,3 +47,7 @@ Module đề thi, lượt làm bài, autosave, chấm điểm và kết quả.
 
 Kiểm thử tích hợp local bằng `npm run verify:slice-1` và
 `npm run verify:slice-2` khi dev server đang chạy.
+
+Import bộ 8 đề thi thử TN THPT 2026 trong `data/BoDeThiThuTHPT2026` bằng
+`npm run seed:bqd-thpt-2026`. Script có thể chạy lại an toàn và tự giao đề cho
+tất cả lớp đang hoạt động.

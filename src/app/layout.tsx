@@ -2,6 +2,7 @@
 import { Comfortaa, Noto_Serif_Display } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 
 const comfortaa = Comfortaa({

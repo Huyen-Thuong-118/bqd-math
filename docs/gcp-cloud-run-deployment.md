@@ -20,8 +20,9 @@ git pull
 bash scripts/deploy-gcp-production.sh
 ```
 
-Script tự cấp IAM, tạo các khóa ngẫu nhiên còn thiếu, migration, seed ADMIN,
-build/deploy, cấu hình Auth URL, Google Login tùy chọn, CORS và Cloud Scheduler.
+Script tự cấp IAM, tạo các khóa ngẫu nhiên còn thiếu, tạo backup Cloud SQL theo
+yêu cầu trước migration, migration, seed ADMIN, build/deploy, cấu hình Auth
+URL, Google Login tùy chọn, CORS và Cloud Scheduler.
 Script chỉ hỏi các giá trị nó không thể tự sinh: Resend API key/email gửi,
 thông tin ADMIN và Google OAuth Client ID/Secret. Nếu bước nào
 lỗi, script dừng ngay và có thể chạy lại an toàn; các tài nguyên/secret đã tạo
@@ -184,6 +185,10 @@ done
 
 ## 6. Migration và deploy
 
+Script deploy mặc định tạo một on-demand backup và chờ backup hoàn tất trước
+khi chạy migration. Chỉ khi đã có một backup thủ công tương đương mới bỏ qua
+bằng `CREATE_PREDEPLOY_BACKUP=false`.
+
 ```bash
 gcloud builds submit --config cloudbuild.migrate.yaml .
 gcloud builds submit --config cloudbuild.yaml .
@@ -229,7 +234,7 @@ Nhập thông tin bằng prompt để mật khẩu không nằm trong shell hist
 
 ```bash
 read -r -p "Email ADMIN: " SEED_ADMIN_EMAIL_VALUE
-read -r -p "Số điện thoại ADMIN: " SEED_ADMIN_PHONE_VALUE
+read -r -p "Tài khoản hoặc số điện thoại đăng nhập ADMIN: " SEED_ADMIN_PHONE_VALUE
 read -r -s -p "Mật khẩu ADMIN mạnh: " SEED_ADMIN_PASSWORD_VALUE
 echo
 

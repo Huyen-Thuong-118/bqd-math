@@ -9,11 +9,6 @@ import {
 } from "../src/features/progress/metrics";
 import { parseReviewQuestionFilters } from "../src/features/review-questions/filters";
 import { parseSearchFilters } from "../src/features/search/filters";
-import {
-  generateStudentCode,
-  isValidClassCode,
-  normalizeClassCode,
-} from "../src/lib/management-codes";
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -32,11 +27,6 @@ function assertDensePositions(
 }
 
 async function main() {
-  const studentCode = generateStudentCode();
-  assert(/^HS-[A-F0-9]{8}$/.test(studentCode), "Mã học sinh sinh ra sai định dạng.");
-  assert(normalizeClassCode(" 12a1 - 2026 ") === "12A1-2026", "Normalize mã lớp chưa đúng.");
-  assert(isValidClassCode("12A1-2026") && !isValidClassCode("A"), "Validate mã lớp chưa đúng.");
-
   const search = parseSearchFilters({ q: "%_Toán".repeat(40), type: "bad", page: "-2" });
   assert(search.q.length === 100 && search.type === "all" && search.page === 1, "Parser tìm kiếm không whitelist/giới hạn input.");
   const documents = parseStudentDocumentFilters({ type: "bad", sort: "TITLE", page: "2" });
@@ -65,8 +55,10 @@ async function main() {
   );
   assert(graded.score === 10 && graded.correctCount === 3, "Đề không PDF ba loại câu chưa chấm đúng.");
 
-  const [studentsWithoutCode, pdfWithoutFile, noPdfWithoutQuestions, folderRows, documentRows, examRows] = await Promise.all([
-    db.user.count({ where: { role: "STUDENT", studentCode: null } }),
+  const [studentsWithoutCode, studentCodes, classCodes, pdfWithoutFile, noPdfWithoutQuestions, folderRows, documentRows, examRows] = await Promise.all([
+    db.user.count({ where: { role: "STUDENT", status: { in: ["ACTIVE", "SUSPENDED"] }, studentCode: null } }),
+    db.user.findMany({ where: { role: "STUDENT", status: { in: ["ACTIVE", "SUSPENDED"] } }, select: { studentCode: true } }),
+    db.class.findMany({ select: { code: true } }),
     db.exam.count({ where: { source: "PDF", examFileUrl: null } }),
     db.exam.count({ where: { source: { in: ["QUESTION_BANK", "MANUAL"] }, questions: { none: {} } } }),
     db.folder.findMany({ select: { kind: true, parentId: true, position: true } }),
@@ -74,6 +66,8 @@ async function main() {
     db.exam.findMany({ select: { folderId: true, position: true } }),
   ]);
   assert(studentsWithoutCode === 0, "Còn học sinh cũ chưa được backfill mã.");
+  assert(studentCodes.every((student) => /^\d+$/.test(student.studentCode ?? "")), "Mã học sinh chưa phải số thứ tự.");
+  assert(classCodes.every((classroom) => /^\d+$/.test(classroom.code)), "Mã lớp chưa phải số thứ tự.");
   assert(pdfWithoutFile === 0 && noPdfWithoutQuestions === 0, "Dữ liệu đề vi phạm invariant nguồn đề.");
   assertDensePositions(folderRows.map((row) => ({ group: `${row.kind}:${row.parentId ?? "root"}`, position: row.position })), "Folder");
   assertDensePositions(documentRows.map((row) => ({ group: row.folderId ?? "root", position: row.position })), "Document");

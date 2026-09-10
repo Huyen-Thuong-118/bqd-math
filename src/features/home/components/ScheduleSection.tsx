@@ -20,7 +20,7 @@ export function ScheduleSection({ schedule }: { schedule: DaySchedule[] }) {
       className="relative scroll-mt-32 py-12 sm:py-16"
     >
       {/* Blob nền cho cả section */}
-      <div className="pointer-events-none absolute top-10 left-1/2 -z-10 size-72 -translate-x-1/2 rounded-full bg-gradient-to-br from-pastel-300/40 to-navy-100/40 blur-3xl" />
+      <div className="schedule-section-glow pointer-events-none absolute top-10 left-1/2 -z-10 size-72 -translate-x-1/2 rounded-full bg-gradient-to-br from-pastel-300/40 to-navy-100/40 blur-3xl" />
 
       <motion.header
         initial={{ opacity: 0, y: 24 }}

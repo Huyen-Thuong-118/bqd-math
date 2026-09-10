@@ -25,7 +25,14 @@ services:
       - "127.0.0.1:8001:8000"
     environment:
       TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+      QUESTION_IMPORT_STORAGE_ROOT: /data/question-import
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-global}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
     volumes:
+      - bqdmath_question_import_data:/data/question-import
+      # Cho phép importer dùng ADC được tạo bởi `npm run setup:local:vertex`.
+      # Trên production, workload identity/service account thay thế mount này.
       - ${BQDMATH_GCLOUD_CONFIG_DIR:-${HOME:-.}/.config/gcloud}:/root/.config/gcloud:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
@@ -35,3 +42,4 @@ services:
 
 volumes:
   bqdmath_postgres_data:
+  bqdmath_question_import_data:

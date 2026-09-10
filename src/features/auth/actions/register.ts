@@ -1,9 +1,6 @@
 "use server";
 
-import { Prisma } from "@prisma/client";
-
 import { db } from "@/lib/db";
-import { generateStudentCode } from "@/lib/management-codes";
 import { hashPassword } from "@/lib/password";
 import {
   validateConfirmPassword,
@@ -70,31 +67,18 @@ export async function register(input: RegisterInput): Promise<RegisterResult> {
     // trong chuỗi hash, verify vẫn đúng dù rounds khác nhau giữa các user).
     const passwordHash = await hashPassword(password);
 
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      try {
-        await db.user.create({
-          data: {
-            name: fullName,
-            studentCode: generateStudentCode(),
-            studentPhone,
-            parentPhone,
-            email,
-            passwordHash,
-            role: "STUDENT",
-            status: "PENDING",
-          },
-        });
-        return { success: true };
-      } catch (error) {
-        const target = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
-          ? JSON.stringify(error.meta?.target ?? "")
-          : "";
-        if (target.includes("studentCode") && attempt < 3) continue;
-        throw error;
-      }
-    }
-
-    return { success: false, error: "Không thể cấp mã học sinh, vui lòng thử lại." };
+    await db.user.create({
+      data: {
+        name: fullName,
+        studentPhone,
+        parentPhone,
+        email,
+        passwordHash,
+        role: "STUDENT",
+        status: "PENDING",
+      },
+    });
+    return { success: true };
   } catch (error) {
     console.error("Đăng ký thất bại:", error);
     return { success: false, error: "Đã có lỗi xảy ra, vui lòng thử lại." };

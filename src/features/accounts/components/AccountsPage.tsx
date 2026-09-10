@@ -4,12 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 
+import type { ClassMultiSelectOption } from "@/components/forms/ClassMultiSelect";
 import {
   approveAccount,
   reactivateAccount,
   rejectAccount,
   resetStudentPassword,
   revokeAccount,
+  setStudentClasses,
 } from "../actions";
 import type { AccountFilter, StudentAccount } from "../types";
 import { AccountFilterTabs } from "./AccountFilterTabs";
@@ -20,12 +22,14 @@ type PendingAction =
   | { type: "reject"; account: StudentAccount }
   | { type: "suspend"; account: StudentAccount };
 
-type ActionResult = { success: boolean; error?: string };
+type ActionResult = { success: boolean; error?: string; studentCode?: string; classIds?: string[] };
 
 export function AccountsPage({
   initialAccounts,
+  classes,
 }: {
   initialAccounts: StudentAccount[];
+  classes: ClassMultiSelectOption[];
 }) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<StudentAccount[]>(initialAccounts);
@@ -79,7 +83,7 @@ export function AccountsPage({
   function runAction(
     id: string,
     action: () => Promise<ActionResult>,
-    onSuccess: () => void,
+    onSuccess: (result: ActionResult) => void,
   ) {
     setErrorMessage(undefined);
     setPendingId(id);
@@ -92,16 +96,40 @@ export function AccountsPage({
         return;
       }
 
-      onSuccess();
+      onSuccess(result);
       router.refresh();
     });
   }
 
-  function handleApprove(id: string) {
-    runAction(id, () => approveAccount(id), () => {
+  function handleApprove(id: string, classIds: string[]) {
+    runAction(id, () => approveAccount(id, classIds), (result) => {
+      const savedClassIds = result.classIds ?? classIds;
       setAccounts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: "ACTIVE" } : a)),
+        prev.map((a) => (
+          a.id === id
+            ? {
+                ...a,
+                status: "ACTIVE",
+                studentCode: result.studentCode ?? a.studentCode,
+                classIds: savedClassIds,
+                classNames: classes.filter((item) => savedClassIds.includes(item.id)).map((item) => item.name),
+              }
+            : a
+        )),
       );
+    });
+  }
+
+  function handleUpdateClasses(id: string, classIds: string[]) {
+    runAction(id, () => setStudentClasses(id, classIds), (result) => {
+      const savedClassIds = result.classIds ?? classIds;
+      setAccounts((prev) => prev.map((account) => account.id === id
+        ? {
+            ...account,
+            classIds: savedClassIds,
+            classNames: classes.filter((item) => savedClassIds.includes(item.id)).map((item) => item.name),
+          }
+        : account));
     });
   }
 
@@ -159,7 +187,7 @@ export function AccountsPage({
       <div>
         <h1 className="text-xl font-semibold text-navy-600">Quản lý học sinh</h1>
         <p className="mt-1 text-sm text-navy-300">
-          Duyệt tài khoản đăng ký mới, thu hồi hoặc kích hoạt lại quyền truy cập.
+          Duyệt tài khoản, xếp lớp ngay khi duyệt, thu hồi hoặc kích hoạt lại quyền truy cập.
         </p>
       </div>
 
@@ -187,8 +215,10 @@ export function AccountsPage({
 
       <AccountsTable
         accounts={filteredAccounts}
+        classes={classes}
         pendingId={pendingId}
         onApprove={handleApprove}
+        onUpdateClasses={handleUpdateClasses}
         onReject={(account) => setPendingAction({ type: "reject", account })}
         onSuspend={(account) => setPendingAction({ type: "suspend", account })}
         onReactivate={handleReactivate}

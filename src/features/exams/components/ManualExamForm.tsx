@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Eye, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import { ClassMultiSelect } from "@/components/forms/ClassMultiSelect";
 import { createManualExam } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
 import { InlineExamFolderCreator } from "./InlineExamFolderCreator";
@@ -98,12 +99,7 @@ export function ManualExamForm({ classes, folders }: { classes: ClassOption[]; f
           <label className="flex min-h-11 items-center gap-2 text-sm font-semibold text-green-800"><input name="publishNow" type="checkbox" defaultChecked /> Xuất bản ngay</label>
         </section>
 
-        <fieldset>
-          <legend className="text-sm font-semibold text-navy-500">Giao cho lớp</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {classes.map((item) => <label key={item.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-pastel-50 px-3 py-2 text-xs text-navy-500"><input name="classIds" value={item.id} type="checkbox" />{item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}
-          </div>
-        </fieldset>
+        <ClassMultiSelect classes={classes} />
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

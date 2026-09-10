@@ -13,3 +13,6 @@ Module "Tài liệu" — đề thi + tài liệu ôn tập có đáp án, admin 
   loại file, đáp án công bố, quyền tải và sắp xếp; query được phân trang ở server.
 
 Học sinh chỉ query tài liệu qua lớp có `ClassEnrollment.studentId` đúng session.
+
+Lệnh `npm run seed:bqd-thpt-2026` đồng thời thêm file tổng hợp 8 lần thi thử
+vào thư mục tài liệu `Ôn thi TN THPT 2026` và giao cho tất cả lớp đang hoạt động.

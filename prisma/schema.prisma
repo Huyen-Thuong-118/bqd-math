@@ -158,8 +158,8 @@ model Class {
   code        String      @unique
   // level phân loại lớp Cơ bản/Nâng cao. schedule được giữ để tương thích dữ
   // liệu cũ; lịch mới dùng ClassScheduleSlot để một lớp có thể học nhiều buổi.
-  level       ClassLevel @default(BASIC)
-  schedule    String     @default("")
+  level       ClassLevel  @default(BASIC)
+  schedule    String      @default("")
   description String?
   status      ClassStatus @default(ACTIVE)
 
@@ -189,8 +189,8 @@ model ClassScheduleSlot {
   startTime String
   endTime   String
 
-  @@index([classId, dayOfWeek])
   @@unique([classId, dayOfWeek, startTime, endTime])
+  @@index([classId, dayOfWeek])
 }
 
 // N-N Class <-> User (student) — thay cho ClassStudent cũ (đã xoá, không ai
@@ -472,11 +472,13 @@ model ReviewQuestion {
   topic         String?
   difficulty    QuestionDifficulty @default(MEDIUM)
 
-  textSolution     String?
-  solutionImageUrl String?
-  videoUrl         String? // null -> hiện "GV chưa làm video"
-  videoUid         String?
-  showSolution     Boolean @default(true)
+  textSolution      String?
+  solutionImageUrl  String?
+  questionImageKeys Json    @default("[]")
+  solutionImageKeys Json    @default("[]")
+  videoUrl          String? // null -> hiện "GV chưa làm video"
+  videoUid          String?
+  showSolution      Boolean @default(true)
 
   attempts   ReviewAttempt[]
   classLinks ClassReviewQuestion[] // N-N với Class — dùng lại câu hỏi cho nhiều lớp
@@ -537,26 +539,36 @@ model TeachingSchedule {
 enum NotificationType {
   EMAIL
   SMS
+  IN_APP
 }
 
 model Notification {
-  id      String           @id @default(cuid())
-  userId  String
-  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type    NotificationType
-  content String
-  sentAt  DateTime         @default(now())
+  id                  String             @id @default(cuid())
+  userId              String
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type                NotificationType
+  title               String?
+  content             String
+  href                String?
+  readAt              DateTime?
+  classAnnouncementId String?
+  classAnnouncement   ClassAnnouncement? @relation(fields: [classAnnouncementId], references: [id], onDelete: Cascade)
+  sentAt              DateTime           @default(now())
+
+  @@unique([userId, classAnnouncementId])
+  @@index([userId, type, readAt, sentAt])
 }
 
 model ClassAnnouncement {
-  id        String   @id @default(cuid())
-  classId   String
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  title     String
-  content   String
-  isVisible Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String         @id @default(cuid())
+  classId       String
+  class         Class          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  title         String
+  content       String
+  isVisible     Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
 
   @@index([classId, createdAt])
 }

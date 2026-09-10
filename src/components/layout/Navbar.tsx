@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { KeyRound, LogIn, LogOut, Menu, Search, ShieldCheck, UserPlus, X } from "lucide-react";
+import { Bell, KeyRound, LogIn, LogOut, Menu, Search, ShieldCheck, UserPlus, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { NAV_LINKS } from "./navLinks";
+import { ADMIN_NAV_LINKS, NAV_LINKS } from "./navLinks";
 
 /**
  * Thanh tác vụ đầu trang — hiển thị trên MỌI trang public + student.
@@ -19,12 +19,12 @@ import { NAV_LINKS } from "./navLinks";
  * để vuông sát mép trình duyệt, chỉ bo 2 góc dưới nên thanh đọc như một cái
  * khay treo từ đầu trang xuống; bóng đổ nhẹ phía dưới để tách khỏi nội dung.
  *
- * `overflow-hidden` (chỉ dưới xl) là BẮT BUỘC, không phải cho đẹp: panel menu
+ * `overflow-hidden` (chỉ dưới 2xl) là BẮT BUỘC, không phải cho đẹp: panel menu
  * mobile nằm trong header và cùng màu nền, không cắt thì 2 góc vuông của nó
  * thò ra ngoài đường bo khi menu đang mở. Bóng đổ vẽ ngoài border-box nên
  * không bị cắt. Từ xl trở lên phải TRẢ LẠI overflow-visible: panel mobile đã
- * `xl:hidden` (hết cần clip) và dropdown tài khoản (AccountMenu, absolute)
- * lại trồi xuống dưới mép header — overflow-hidden ở xl sẽ cắt cụt nó, dropdown
+ * `2xl:hidden` (hết cần clip) và dropdown tài khoản (AccountMenu, absolute)
+ * lại trồi xuống dưới mép header — overflow-hidden ở 2xl sẽ cắt cụt nó, dropdown
  * mở ra trông như "rỗng" dù item vẫn render đúng trong DOM.
  *
  * Bố cục 3 vùng: trái = logo BQDMath (về "/") · giữa = NAV_LINKS ·
@@ -39,25 +39,36 @@ import { NAV_LINKS } from "./navLinks";
  * Nền `bg-nav` (#f0f3fa, xem globals.css): xám-xanh nhạt hơi lệch tông khỏi
  * nền trang pastel-100 nên thanh vẫn tách ra dù phẳng và không viền dày.
  *
- * Dưới xl: menu thu vào nút hamburger, chỉ còn logo + hamburger cho đỡ chật —
- * ở cỡ chữ này 6 mục menu + 2 nút không đủ chỗ trên 1 hàng.
+ * Dưới 2xl: menu thu vào nút hamburger, chỉ còn logo + hamburger cho đỡ chật —
+ * ở cỡ chữ này các mục menu, chuông và tài khoản không đủ chỗ trên 1 hàng.
  */
-export function Navbar() {
+const STUDENT_PROGRESS_LINK = { href: "/theo-doi-hoc-tap", label: "Theo dõi học tập" };
+
+export function Navbar({ unreadNotificationCount = 0 }: { unreadNotificationCount?: number }) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated" && session?.user;
+  const isStudent = isAuthenticated && session.user.role === "STUDENT";
+  const isAdmin = isAuthenticated && session.user.role === "ADMIN";
+  const links = isAdmin
+    ? ADMIN_NAV_LINKS
+    : isStudent
+      ? [...NAV_LINKS, STUDENT_PROGRESS_LINK]
+      : NAV_LINKS;
+  const homeHref = isAdmin ? "/admin" : "/";
+  const visibleUnreadCount = pathname === "/thong-bao" ? 0 : unreadNotificationCount;
 
   return (
-    <header className="sticky top-0 z-50 w-full overflow-hidden rounded-b-[2.25rem] bg-nav shadow-[0_10px_28px_rgba(27,42,74,0.12)] xl:overflow-visible">
+    <header className="sticky top-0 z-50 w-full overflow-hidden rounded-b-[2.25rem] bg-nav shadow-[0_10px_28px_rgba(27,42,74,0.12)] 2xl:overflow-visible">
       <nav
         aria-label="Điều hướng chính"
-        className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-4 xl:grid-cols-[1fr_auto_1fr] xl:px-5"
+        className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-4 2xl:grid-cols-[1fr_auto_1fr] 2xl:px-5"
       >
         {/* TRÁI — logo, bấm về Trang chủ */}
         <div className="flex items-center justify-start">
           <Link
-            href="/"
+            href={homeHref}
             className="text-2xl font-semibold tracking-tight whitespace-nowrap text-navy-500 transition-opacity hover:opacity-70"
           >
             BQD<span className="text-navy-300">Math</span>
@@ -65,8 +76,8 @@ export function Navbar() {
         </div>
 
         {/* GIỮA — toàn bộ mục menu (chỉ desktop) */}
-        <ul className="hidden items-center gap-0.5 text-lg xl:flex">
-          {NAV_LINKS.map((link) => {
+        <ul className="hidden items-center gap-0.5 text-lg 2xl:flex">
+          {links.map((link) => {
             const isActive = pathname === link.href;
             return (
               <li key={link.href}>
@@ -90,17 +101,31 @@ export function Navbar() {
         {/* PHẢI — cụm tài khoản, tách khỏi menu bằng vạch ngăn để đọc như 1
             khối riêng. Đăng ký là nút chính (nền navy đặc), Đăng nhập là phụ.
             Hamburger thay cả cụm này ở mobile. */}
-        <div className="flex items-center justify-end gap-2 xl:border-l xl:border-navy-100/80 xl:pl-3">
-          <ThemeToggle className="hidden w-32 xl:flex" />
+        <div className="flex items-center justify-end gap-2 2xl:border-l 2xl:border-navy-100/80 2xl:pl-3">
+          <ThemeToggle className="hidden w-32 2xl:flex" />
+          {isStudent && (
+            <Link
+              href="/thong-bao"
+              aria-label={visibleUnreadCount ? `${visibleUnreadCount} thông báo chưa đọc` : "Thông báo"}
+              className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-navy-200/60 bg-white text-navy-500 transition-colors hover:bg-pastel-50"
+            >
+              <Bell className="size-5" aria-hidden />
+              {visibleUnreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-5 text-white">
+                  {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
+                </span>
+              )}
+            </Link>
+          )}
           {isAuthenticated ? (
-            <div className="hidden xl:block">
+            <div className="hidden 2xl:block">
               <AccountMenu user={session.user} />
             </div>
           ) : (
             <>
               <Link
                 href="/dang-nhap"
-                className="hidden items-center gap-2 rounded-full border border-navy-200/60 bg-white px-5 py-2.5 text-lg font-medium whitespace-nowrap text-navy-500 transition-colors hover:bg-pastel-50 xl:inline-flex"
+                className="hidden items-center gap-2 rounded-full border border-navy-200/60 bg-white px-5 py-2.5 text-lg font-medium whitespace-nowrap text-navy-500 transition-colors hover:bg-pastel-50 2xl:inline-flex"
               >
                 <LogIn className="size-5" aria-hidden />
                 Đăng nhập
@@ -108,7 +133,7 @@ export function Navbar() {
 
               <Link
                 href="/dang-ky"
-                className="hidden items-center gap-2 rounded-full bg-navy-500 px-5 py-2.5 text-lg font-semibold whitespace-nowrap text-pastel-50 transition-colors hover:bg-navy-600 xl:inline-flex"
+                className="hidden items-center gap-2 rounded-full bg-navy-500 px-5 py-2.5 text-lg font-semibold whitespace-nowrap text-pastel-50 transition-colors hover:bg-navy-600 2xl:inline-flex"
               >
                 <UserPlus className="size-5" aria-hidden />
                 Đăng ký
@@ -122,7 +147,7 @@ export function Navbar() {
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
             aria-label={isMenuOpen ? "Đóng menu" : "Mở menu"}
-            className="inline-flex size-11 items-center justify-center rounded-full border border-navy-200/60 bg-white text-navy-500 transition-colors hover:bg-pastel-50 xl:hidden"
+            className="inline-flex size-11 items-center justify-center rounded-full border border-navy-200/60 bg-white text-navy-500 transition-colors hover:bg-pastel-50 2xl:hidden"
           >
             {isMenuOpen ? (
               <X className="size-6" aria-hidden />
@@ -137,11 +162,11 @@ export function Navbar() {
       <div
         id="mobile-menu"
         hidden={!isMenuOpen}
-        className="border-t border-navy-100/70 bg-nav xl:hidden"
+        className="border-t border-navy-100/70 bg-nav 2xl:hidden"
       >
         <ul className="flex w-full flex-col gap-1 px-4 py-4 text-lg">
           <li><ThemeToggle className="w-full" /></li>
-          {NAV_LINKS.map((link) => {
+          {links.map((link) => {
             const isActive = pathname === link.href;
             return (
               <li key={link.href}>

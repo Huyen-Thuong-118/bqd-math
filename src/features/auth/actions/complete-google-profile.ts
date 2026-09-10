@@ -4,7 +4,6 @@ import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { generateStudentCode } from "@/lib/management-codes";
 import { validateParentPhone, validatePhone } from "../lib/validation";
 
 interface CompleteProfileInput {
@@ -40,23 +39,11 @@ export async function completeGoogleProfile(
   }
 
   try {
-    const current = await db.user.findUnique({ where: { id: session.user.id }, select: { studentCode: true } });
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      try {
-        await db.user.update({
-          where: { id: session.user.id, role: "STUDENT" },
-          data: { studentPhone, parentPhone, studentCode: current?.studentCode ?? generateStudentCode() },
-        });
-        return { success: true };
-      } catch (error) {
-        const target = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002"
-          ? JSON.stringify(error.meta?.target ?? "")
-          : "";
-        if (target.includes("studentCode") && attempt < 3) continue;
-        throw error;
-      }
-    }
-    return { success: false, error: "Không thể cấp mã học sinh, vui lòng thử lại." };
+    await db.user.update({
+      where: { id: session.user.id, role: "STUDENT" },
+      data: { studentPhone, parentPhone },
+    });
+    return { success: true };
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

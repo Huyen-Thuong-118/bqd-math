@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 
+import { ClassMultiSelect, type ClassMultiSelectOption } from "@/components/forms/ClassMultiSelect";
 import { cn } from "@/lib/utils";
 import type { StudentAccount } from "../types";
 import { StatusBadge } from "./StatusBadge";
@@ -31,7 +33,8 @@ const actionButtonClass =
   "rounded-full px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors";
 
 interface AccountActionHandlers {
-  onApprove: (id: string) => void;
+  onApprove: (id: string, classIds: string[]) => void;
+  onUpdateClasses: (id: string, classIds: string[]) => void;
   onReject: (account: StudentAccount) => void;
   onSuspend: (account: StudentAccount) => void;
   onReactivate: (id: string) => void;
@@ -40,19 +43,29 @@ interface AccountActionHandlers {
 
 interface AccountsTableProps extends AccountActionHandlers {
   accounts: StudentAccount[];
+  classes: ClassMultiSelectOption[];
   /** id account đang có server action chạy dở, hoặc null nếu không có. */
   pendingId: string | null;
 }
 
+type ClassDialogState = {
+  account: StudentAccount;
+  mode: "approve" | "update";
+};
+
 export function AccountsTable({
   accounts,
+  classes,
   pendingId,
   onApprove,
+  onUpdateClasses,
   onReject,
   onSuspend,
   onReactivate,
   onResetPassword,
 }: AccountsTableProps) {
+  const [classDialog, setClassDialog] = useState<ClassDialogState | null>(null);
+
   if (accounts.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-navy-200/60 bg-white/60 py-16 text-center text-sm text-navy-300">
@@ -62,11 +75,11 @@ export function AccountsTable({
   }
 
   const actionProps = {
-    onApprove,
     onReject,
     onSuspend,
     onReactivate,
     onResetPassword,
+    onOpenClassDialog: (account: StudentAccount, mode: ClassDialogState["mode"]) => setClassDialog({ account, mode }),
   };
 
   return (
@@ -78,7 +91,7 @@ export function AccountsTable({
           <thead>
             <tr className="border-b border-navy-100 text-xs font-semibold tracking-wide text-navy-300 uppercase">
               <th className="px-4 py-3">Họ tên</th>
-              <th className="px-4 py-3">Mã học sinh</th>
+              <th className="px-4 py-3">Mã HS (STT)</th>
               <th className="px-4 py-3">SĐT học sinh</th>
               <th className="px-4 py-3">SĐT phụ huynh</th>
               <th className="px-4 py-3">Email</th>
@@ -91,7 +104,7 @@ export function AccountsTable({
             {accounts.map((account) => (
               <tr key={account.id} className="border-b border-navy-100/60 last:border-0">
                 <td className="px-4 py-3.5 font-medium text-navy-500">{account.name}</td>
-                <td className="px-4 py-3.5 font-semibold text-navy-500">{account.studentCode ?? "—"}</td>
+                <td className="px-4 py-3.5 font-semibold text-navy-500">{account.studentCode ?? "Chờ duyệt"}</td>
                 <td className="px-4 py-3.5 text-navy-400">{formatPhone(account.studentPhone)}</td>
                 <td className="px-4 py-3.5 text-navy-400">{formatPhone(account.parentPhone)}</td>
                 <td className="px-4 py-3.5 text-navy-400">{account.email}</td>
@@ -120,7 +133,7 @@ export function AccountsTable({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-medium text-navy-500">{account.name}</p>
-                <p className="text-xs text-navy-300">{account.studentCode ?? "Chưa có mã"} · {account.email}</p>
+                <p className="text-xs text-navy-300">{account.studentCode ? `Mã HS ${account.studentCode}` : "Chờ cấp mã khi duyệt"} · {account.email}</p>
               </div>
               <StatusBadge status={account.status} />
             </div>
@@ -151,6 +164,18 @@ export function AccountsTable({
           </div>
         ))}
       </div>
+
+      <ClassAssignmentDialog
+        state={classDialog}
+        classes={classes}
+        pending={Boolean(classDialog && pendingId === classDialog.account.id)}
+        onCancel={() => setClassDialog(null)}
+        onSubmit={(account, mode, classIds) => {
+          if (mode === "approve") onApprove(account.id, classIds);
+          else onUpdateClasses(account.id, classIds);
+          setClassDialog(null);
+        }}
+      />
     </>
   );
 }
@@ -158,12 +183,16 @@ export function AccountsTable({
 function AccountActions({
   account,
   isPending,
-  onApprove,
   onReject,
   onSuspend,
   onReactivate,
   onResetPassword,
-}: AccountActionHandlers & { account: StudentAccount; isPending: boolean }) {
+  onOpenClassDialog,
+}: Omit<AccountActionHandlers, "onApprove" | "onUpdateClasses"> & {
+  account: StudentAccount;
+  isPending: boolean;
+  onOpenClassDialog: (account: StudentAccount, mode: ClassDialogState["mode"]) => void;
+}) {
   const spinner = <Loader2 className="size-3.5 animate-spin" aria-hidden />;
 
   if (account.status === "PENDING") {
@@ -171,7 +200,7 @@ function AccountActions({
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => onApprove(account.id)}
+          onClick={() => onOpenClassDialog(account, "approve")}
           disabled={isPending}
           className={cn(
             actionButtonClass,
@@ -179,7 +208,7 @@ function AccountActions({
           )}
         >
           {isPending && spinner}
-          Duyệt
+          Duyệt & xếp lớp
         </button>
         <button
           type="button"
@@ -200,6 +229,15 @@ function AccountActions({
   if (account.status === "ACTIVE") {
     return (
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onOpenClassDialog(account, "update")}
+          disabled={isPending}
+          className={cn(actionButtonClass, "inline-flex items-center gap-1.5 border border-navy-200 text-navy-500 hover:bg-pastel-100 disabled:opacity-60")}
+        >
+          {isPending && spinner}
+          Xếp lớp{account.classIds.length ? ` (${account.classIds.length})` : ""}
+        </button>
         <button
           type="button"
           onClick={() => onResetPassword(account)}
@@ -241,5 +279,73 @@ function AccountActions({
       {isPending && spinner}
       Kích hoạt lại
     </button>
+  );
+}
+
+function ClassAssignmentDialog({
+  state,
+  classes,
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  state: ClassDialogState | null;
+  classes: ClassMultiSelectOption[];
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (account: StudentAccount, mode: ClassDialogState["mode"], classIds: string[]) => void;
+}) {
+  useEffect(() => {
+    if (!state) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pending) onCancel();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onCancel, pending, state]);
+
+  if (!state) return null;
+  const { account, mode } = state;
+
+  return (
+    <div onClick={() => !pending && onCancel()} className="fixed inset-0 z-[70] flex items-center justify-center bg-navy-900/45 p-4 backdrop-blur-sm">
+      <div role="dialog" aria-modal="true" aria-labelledby="class-assignment-title" onClick={(event) => event.stopPropagation()} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl border border-navy-100 bg-white p-5 shadow-2xl sm:p-6">
+        <h2 id="class-assignment-title" className="text-lg font-semibold text-navy-600">
+          {mode === "approve" ? "Duyệt và xếp lớp" : "Xếp lớp học"}
+        </h2>
+        <p className="mt-1 text-sm text-navy-400">
+          {account.name} · Mã HS {account.studentCode ?? "sẽ được cấp khi duyệt"}
+        </p>
+
+        <form
+          key={`${mode}-${account.id}`}
+          action={(formData) => onSubmit(
+            account,
+            mode,
+            formData.getAll("classIds").filter((value): value is string => typeof value === "string"),
+          )}
+          className="mt-5"
+        >
+          <ClassMultiSelect classes={classes} defaultSelected={account.classIds} label="Chọn lớp học" />
+          <p className="mt-3 text-sm text-navy-300">
+            Hiện tại: {account.classNames.join(", ") || "Chưa xếp lớp"}
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" onClick={onCancel} disabled={pending} className="rounded-full bg-gray-100 px-5 py-2.5 text-sm font-medium text-navy-500 hover:bg-gray-200 disabled:opacity-60">
+              Hủy
+            </button>
+            <button type="submit" disabled={pending} className="inline-flex items-center gap-2 rounded-full bg-navy-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy-700 disabled:opacity-60">
+              {pending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+              {mode === "approve" ? "Duyệt học sinh" : "Lưu lớp"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

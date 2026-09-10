@@ -3,23 +3,151 @@
 import { useState, useTransition } from "react";
 import { CheckCircle2, CircleX, PlayCircle } from "lucide-react";
 
+import { MathText } from "@/components/math/MathText";
+
 import { answerReviewQuestion, type ReviewAnswerResult } from "../actions";
 
-type Question = { id: string; content: string; type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER"; options: string[]; grade: string | null; topic: string | null; difficulty: "EASY" | "MEDIUM" | "HARD"; attemptCount: number; lastCorrect: boolean | null };
+type Question = {
+  id: string;
+  content: string;
+  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER";
+  options: string[];
+  questionImageUrls: string[];
+  grade: string | null;
+  topic: string | null;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  attemptCount: number;
+  lastCorrect: boolean | null;
+};
 
 export function ReviewPractice({ questions }: { questions: Question[] }) {
-  if (!questions.length) return <p className="rounded-3xl border border-dashed border-navy-100 p-10 text-center text-sm text-navy-300">Không có câu hỏi phù hợp bộ lọc.</p>;
-  return <div className="space-y-5">{questions.map((question, index) => <QuestionCard key={question.id} question={question} number={index + 1} />)}</div>;
+  if (!questions.length) {
+    return (
+      <p className="rounded-3xl border border-dashed border-navy-100 p-10 text-center text-sm text-navy-300">
+        Không có câu hỏi phù hợp bộ lọc.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-5">
+      {questions.map((question, index) => (
+        <QuestionCard key={question.id} question={question} number={index + 1} />
+      ))}
+    </div>
+  );
 }
 
 function QuestionCard({ question, number }: { question: Question; number: number }) {
-  const [answer, setAnswer] = useState(""); const [result, setResult] = useState<ReviewAnswerResult>(); const [pending, startTransition] = useTransition();
-  const trueFalseValues = answer ? answer.split(",") : Array(question.options.length).fill("");
-  function submit() { startTransition(async () => setResult(await answerReviewQuestion(question.id, answer))); }
-  function setTruth(index: number, value: "D" | "S") { setAnswer(trueFalseValues.map((item, itemIndex) => itemIndex === index ? value : item).join(",")); }
-  return <article className="rounded-3xl border border-navy-100 bg-white p-5"><div className="flex flex-wrap items-center gap-2 text-xs text-navy-400"><span className="rounded-full bg-navy-600 px-2.5 py-1 font-semibold text-white">Câu {number}</span>{question.grade && <span>Khối {question.grade}</span>}{question.topic && <span>· {question.topic}</span>}<span>· {question.difficulty === "EASY" ? "Dễ" : question.difficulty === "HARD" ? "Khó" : "Trung bình"}</span>{question.attemptCount > 0 && <span>· Đã làm {question.attemptCount} lần</span>}</div><p className="mt-4 whitespace-pre-wrap font-medium leading-relaxed text-navy-600">{question.content}</p>
-    <div className="mt-4 space-y-2">{question.type === "MULTIPLE_CHOICE" ? question.options.map((option, index) => { const value = String.fromCharCode(65 + index); return <label key={index} className={`flex cursor-pointer gap-3 rounded-xl border p-3 text-sm ${answer === value ? "border-navy-400 bg-pastel-100" : "border-navy-100"}`}><input type="radio" name={`q-${question.id}`} value={value} checked={answer === value} onChange={() => setAnswer(value)} />{option}</label>; }) : question.type === "TRUE_FALSE" ? question.options.map((option, index) => <div key={index} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-pastel-50 p-3 text-sm text-navy-500"><span>{option}</span><span className="flex gap-3"><label><input type="radio" name={`${question.id}-${index}`} checked={trueFalseValues[index] === "D"} onChange={() => setTruth(index, "D")} /> Đúng</label><label><input type="radio" name={`${question.id}-${index}`} checked={trueFalseValues[index] === "S"} onChange={() => setTruth(index, "S")} /> Sai</label></span></div>) : <input value={answer} onChange={(event) => setAnswer(event.target.value)} className="w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-navy-400" placeholder="Nhập câu trả lời ngắn" />}</div>
-    <button type="button" disabled={pending || !answer || Boolean(result && result.success)} onClick={submit} className="mt-4 rounded-full bg-navy-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? "Đang chấm…" : "Kiểm tra"}</button>
-    {result && (result.success ? <div className={`mt-4 rounded-2xl p-4 ${result.correct ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}><p className="flex items-center gap-2 font-semibold">{result.correct ? <CheckCircle2 className="size-5" /> : <CircleX className="size-5" />}{result.correct ? "Chính xác!" : "Chưa chính xác."}</p>{result.correctAnswer && <p className="mt-2 text-sm">Đáp án: <strong>{result.correctAnswer}</strong></p>}{result.textSolution && <p className="mt-2 whitespace-pre-wrap text-sm"><strong>Lời giải:</strong> {result.textSolution}</p>}{result.solutionImageUrl && <a href={result.solutionImageUrl} target="_blank" rel="noreferrer" className="mt-2 block text-sm font-semibold underline">Xem hình lời giải</a>}{!result.solutionVisible ? <p className="mt-2 text-xs opacity-70">Giáo viên đang ẩn lời giải.</p> : result.videoUrl ? <a href={result.videoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold underline"><PlayCircle className="size-4" />Xem video lời giải</a> : <p className="mt-2 text-xs opacity-70">Giáo viên chưa có video lời giải.</p>}<p className="mt-2 text-xs opacity-70">Bạn đã làm {result.attempts} lần · tỷ lệ đúng {result.correctRate}%</p></div> : <p className="mt-3 text-sm text-red-600">{result.error}</p>)}
-  </article>;
+  const [answer, setAnswer] = useState("");
+  const [result, setResult] = useState<ReviewAnswerResult>();
+  const [pending, startTransition] = useTransition();
+  const trueFalseValues = answer
+    ? answer.split(",")
+    : Array(question.options.length).fill("");
+
+  function submit() {
+    startTransition(async () => setResult(await answerReviewQuestion(question.id, answer)));
+  }
+
+  function setTruth(index: number, value: "D" | "S") {
+    setAnswer(
+      trueFalseValues
+        .map((item, itemIndex) => (itemIndex === index ? value : item))
+        .join(","),
+    );
+  }
+
+  return (
+    <article className="rounded-3xl border border-navy-100 bg-white p-5">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-navy-400">
+        <span className="rounded-full bg-navy-600 px-2.5 py-1 font-semibold text-white">
+          Câu {number}
+        </span>
+        {question.grade && <span>Khối {question.grade}</span>}
+        {question.topic && <span>· {question.topic}</span>}
+        <span>
+          · {question.difficulty === "EASY" ? "Dễ" : question.difficulty === "HARD" ? "Khó" : "Trung bình"}
+        </span>
+        {question.attemptCount > 0 && <span>· Đã làm {question.attemptCount} lần</span>}
+      </div>
+
+      <MathText className="mt-4 block font-medium leading-8 text-navy-600">
+        {question.content}
+      </MathText>
+      {question.questionImageUrls.map((url, index) => (
+        <figure key={url} className="mt-4">
+          {/* eslint-disable-next-line @next/next/no-img-element -- authenticated dynamic question image */}
+          <img
+            src={url}
+            alt={`Hình minh họa ${index + 1} câu ${number}`}
+            className="mx-auto max-h-96 rounded-2xl object-contain"
+          />
+        </figure>
+      ))}
+
+      <div className="mt-4 space-y-2">
+        {question.type === "MULTIPLE_CHOICE" ? (
+          question.options.map((option, index) => {
+            const value = String.fromCharCode(65 + index);
+            return (
+              <label key={index} className={`flex cursor-pointer gap-3 rounded-xl border p-3 text-sm ${answer === value ? "border-navy-400 bg-pastel-100" : "border-navy-100"}`}>
+                <input type="radio" name={`q-${question.id}`} value={value} checked={answer === value} onChange={() => setAnswer(value)} />
+                <MathText>{option}</MathText>
+              </label>
+            );
+          })
+        ) : question.type === "TRUE_FALSE" ? (
+          question.options.map((option, index) => (
+            <div key={index} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-pastel-50 p-3 text-sm text-navy-500">
+              <MathText>{option}</MathText>
+              <span className="flex gap-3">
+                <label><input type="radio" name={`${question.id}-${index}`} checked={trueFalseValues[index] === "D"} onChange={() => setTruth(index, "D")} /> Đúng</label>
+                <label><input type="radio" name={`${question.id}-${index}`} checked={trueFalseValues[index] === "S"} onChange={() => setTruth(index, "S")} /> Sai</label>
+              </span>
+            </div>
+          ))
+        ) : (
+          <input value={answer} onChange={(event) => setAnswer(event.target.value)} className="w-full rounded-xl border border-navy-100 px-3 py-2.5 text-sm outline-none focus:border-navy-400" placeholder="Nhập câu trả lời ngắn" />
+        )}
+      </div>
+
+      <button type="button" disabled={pending || !answer || Boolean(result && result.success)} onClick={submit} className="mt-4 rounded-full bg-navy-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
+        {pending ? "Đang chấm…" : "Kiểm tra"}
+      </button>
+
+      {result && (result.success ? (
+        <div className={`mt-4 rounded-2xl p-4 ${result.correct ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+          <p className="flex items-center gap-2 font-semibold">
+            {result.correct ? <CheckCircle2 className="size-5" /> : <CircleX className="size-5" />}
+            {result.correct ? "Chính xác!" : "Chưa chính xác."}
+          </p>
+          {result.correctAnswer && (
+            <p className="mt-2 text-sm">
+              Đáp án: <strong><MathText mathOnly={question.type === "SHORT_ANSWER"}>{result.correctAnswer}</MathText></strong>
+            </p>
+          )}
+          {result.textSolution && (
+            <div className="mt-2 text-sm"><strong>Lời giải:</strong> <MathText>{result.textSolution}</MathText></div>
+          )}
+          {result.solutionImageUrls.map((url, index) => (
+            <figure key={url} className="mt-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- authenticated dynamic solution image */}
+              <img src={url} alt={`Hình lời giải ${index + 1}`} className="mx-auto max-h-96 rounded-xl object-contain" />
+            </figure>
+          ))}
+          {result.solutionImageUrl && <a href={result.solutionImageUrl} target="_blank" rel="noreferrer" className="mt-2 block text-sm font-semibold underline">Xem hình lời giải</a>}
+          {!result.solutionVisible ? (
+            <p className="mt-2 text-xs opacity-70">Giáo viên đang ẩn lời giải.</p>
+          ) : result.videoUrl ? (
+            <a href={result.videoUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold underline"><PlayCircle className="size-4" />Xem video lời giải</a>
+          ) : (
+            <p className="mt-2 text-xs opacity-70">Giáo viên chưa có video lời giải.</p>
+          )}
+          <p className="mt-2 text-xs opacity-70">Bạn đã làm {result.attempts} lần · tỷ lệ đúng {result.correctRate}%</p>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-red-600">{result.error}</p>
+      ))}
+    </article>
+  );
 }

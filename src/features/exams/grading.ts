@@ -32,9 +32,13 @@ export function normalizeAnswer(value: string | null | undefined): string | null
 }
 
 function normalizeForType(value: string | null | undefined, type: GradableQuestion["type"]) {
+  if (type === "SHORT_ANSWER") {
+    const shortAnswer = value?.trim();
+    if (!shortAnswer) return null;
+    return shortAnswer.replace(/\s/g, "").replace(",", ".");
+  }
   const normalized = normalizeAnswer(value);
   if (!normalized) return null;
-  if (type === "SHORT_ANSWER") return normalized.replace(/\s/g, "").replace(",", ".");
   if (type === "TRUE_FALSE") return normalized.replace(/Đ/g, "D").replace(/\s*,\s*/g, ",");
   return normalized;
 }

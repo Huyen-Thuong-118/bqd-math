@@ -156,6 +156,7 @@ body {
 
 .dark .bg-white,
 .dark [class~="bg-white/95"],
+.dark [class~="bg-white/80"],
 .dark [class~="bg-white/70"],
 .dark [class~="bg-white/60"] {
   background-color: var(--app-surface) !important;
@@ -164,9 +165,17 @@ body {
 .dark .bg-pastel-50,
 .dark .bg-pastel-100,
 .dark .bg-pastel-200,
+.dark .bg-navy-50,
+.dark .bg-navy-100,
 .dark .bg-nav,
+.dark .bg-gray-100,
+.dark .bg-gray-200,
 .dark .bg-slate-50,
-.dark .bg-slate-100 {
+.dark .bg-slate-100,
+.dark [class~="bg-pastel-50/60"],
+.dark [class~="bg-pastel-50/70"],
+.dark [class~="bg-pastel-200/60"],
+.dark [class~="bg-slate-50/50"] {
   background-color: var(--app-surface-muted) !important;
 }
 
@@ -182,14 +191,40 @@ body {
 .dark .text-navy-300,
 .dark .text-navy-200,
 .dark .text-slate-600,
+.dark .text-slate-500,
 .dark .text-slate-400 {
   color: var(--app-text-muted) !important;
+}
+
+.dark [class~="text-navy-300/70"] {
+  color: rgb(170 185 210 / 78%) !important;
 }
 
 .dark .border-navy-50,
 .dark .border-navy-100,
 .dark .border-navy-200,
-.dark .border-slate-200 {
+.dark .border-slate-200,
+.dark [class~="border-navy-100/60"],
+.dark [class~="border-navy-100/70"],
+.dark [class~="border-navy-100/80"],
+.dark [class~="border-navy-200/50"],
+.dark [class~="border-navy-200/60"] {
+  border-color: var(--app-border) !important;
+}
+
+.dark .border-navy-400,
+.dark .border-navy-500,
+.dark .border-navy-600,
+.dark .focus\:border-navy-400:focus {
+  border-color: #6eb9ef !important;
+}
+
+.dark .ring-navy-300,
+.dark .target\:ring-navy-300:target {
+  --tw-ring-color: rgb(110 185 239 / 60%) !important;
+}
+
+.dark [class~="divide-navy-50"] > :not(:last-child) {
   border-color: var(--app-border) !important;
 }
 
@@ -201,23 +236,127 @@ body {
   color: var(--app-text);
 }
 
-.dark .bg-red-50 { background-color: #3a1820 !important; }
-.dark .bg-green-50 { background-color: #12301f !important; }
+.dark input::placeholder,
+.dark textarea::placeholder,
+.dark [class~="placeholder:text-navy-300"]::placeholder,
+.dark [class~="placeholder:text-navy-300/70"]::placeholder {
+  color: #8293ae !important;
+  opacity: 1;
+}
+
+.dark .bg-red-50,
+.dark .bg-red-100 { background-color: #3a1820 !important; }
+.dark .bg-green-50,
+.dark .bg-green-100 { background-color: #12301f !important; }
 .dark .bg-amber-50,
 .dark .bg-amber-100,
 .dark .bg-amber-200 { background-color: #382b12 !important; }
+.dark .bg-sky-50 { background-color: #102b3d !important; }
 .dark .text-red-400,
 .dark .text-red-500,
 .dark .text-red-600,
-.dark .text-red-700 { color: var(--app-danger) !important; }
+.dark .text-red-700,
+.dark .text-red-800 { color: var(--app-danger) !important; }
 .dark .text-green-600,
 .dark .text-green-700,
 .dark .text-green-800 { color: var(--app-success) !important; }
+.dark .text-amber-600,
 .dark .text-amber-700,
 .dark .text-amber-800 { color: #fde68a !important; }
+.dark .text-sky-900 { color: #bae6fd !important; }
+.dark .border-red-100,
+.dark .border-red-200,
+.dark .border-red-300 { border-color: #7f3541 !important; }
+.dark .border-green-200 { border-color: #28633d !important; }
+.dark .border-amber-200,
+.dark .border-amber-300 { border-color: #745719 !important; }
+.dark .border-sky-500 { border-color: #38bdf8 !important; }
+.dark .ring-amber-200 { --tw-ring-color: #745719 !important; }
+.dark .focus\:bg-white:focus { background-color: #22314a !important; }
 .dark .hover\:bg-white:hover,
+.dark [class~="hover:bg-white/80"]:hover,
 .dark .hover\:bg-pastel-50:hover,
-.dark .hover\:bg-pastel-100:hover { background-color: #22314a !important; }
+.dark .hover\:bg-pastel-100:hover,
+.dark [class~="hover:bg-pastel-200/60"]:hover,
+.dark .hover\:bg-gray-200:hover { background-color: #22314a !important; }
+.dark .hover\:bg-red-50:hover { background-color: #4b1d27 !important; }
+
+/* Lịch tuần dùng nhiều lớp kính có opacity. Ở dark mode, giữ chúng thành
+   các surface xanh đen rõ tầng thay vì để màu pastel sáng phủ thành xám đục. */
+.dark .schedule-section-glow {
+  background-image: linear-gradient(135deg, rgb(77 169 235 / 16%), rgb(46 74 138 / 12%));
+  opacity: 0.7;
+}
+
+.dark .schedule-day-card[data-has-sessions="true"] {
+  border-color: rgb(143 201 243 / 22%);
+  background-color: rgb(18 29 48 / 88%);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 28%), inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.dark .schedule-day-card[data-has-sessions="true"]:hover {
+  border-color: rgb(143 201 243 / 38%);
+  box-shadow: 0 20px 48px rgb(0 0 0 / 38%), 0 0 0 1px rgb(110 185 239 / 8%);
+}
+
+.dark .schedule-day-card[data-has-sessions="false"] {
+  border-color: rgb(170 185 210 / 20%);
+  background-color: rgb(15 26 44 / 55%);
+}
+
+.dark .schedule-day-glow {
+  background-image: linear-gradient(135deg, rgb(110 185 239 / 30%), rgb(46 74 138 / 12%));
+  opacity: 0.45;
+}
+
+.dark .schedule-day-icon {
+  border-color: rgb(143 201 243 / 18%);
+  background-color: #0b1628 !important;
+  color: #a9d8f8 !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%), 0 6px 18px rgb(0 0 0 / 24%);
+}
+
+.dark .schedule-session-card {
+  border-color: rgb(143 201 243 / 14%);
+  background-color: rgb(24 37 58 / 82%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.dark .schedule-day-card:hover .schedule-session-card {
+  border-color: rgb(143 201 243 / 22%);
+  background-color: rgb(30 46 70 / 92%);
+}
+
+.dark .schedule-level-badge {
+  border: 1px solid transparent;
+}
+
+.dark .schedule-level-advanced {
+  border-color: rgb(143 201 243 / 26%);
+  background-color: #244f73 !important;
+  color: #e5f5ff !important;
+}
+
+.dark .schedule-level-basic {
+  border-color: rgb(170 185 210 / 18%);
+  background-color: #26354c !important;
+  color: #d9e4f5 !important;
+}
+
+.dark .schedule-mode-badge {
+  border-color: rgb(170 185 210 / 22%) !important;
+  color: #bdc9dc !important;
+}
+
+.dark .schedule-archived-badge {
+  background-color: #2b3545 !important;
+  color: #aab9d2 !important;
+}
+
+.dark .schedule-empty-state {
+  border-color: rgb(170 185 210 / 18%);
+  background-color: rgb(18 29 48 / 40%);
+}
 
 .dark * {
   scrollbar-color: #52637e var(--app-background);

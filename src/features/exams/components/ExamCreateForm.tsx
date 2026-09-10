@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ScanText } from "lucide-react";
 
+import { ClassMultiSelect } from "@/components/forms/ClassMultiSelect";
 import { analyzeExamPdf, createExam, discardExamUpload } from "../admin-actions";
 import type { ExamQuestionType } from "../types";
 import { uploadExamPdf } from "./exam-upload";
@@ -43,7 +44,17 @@ type UploadedFiles = {
   answerKey?: string;
 };
 
-export function ExamCreateForm({ classes, folders, directUpload }: { classes: ClassOption[]; folders: FolderOption[]; directUpload: boolean }) {
+export function ExamCreateForm({
+  classes,
+  folders,
+  directUpload,
+  storageWarning = false,
+}: {
+  classes: ClassOption[];
+  folders: FolderOption[];
+  directUpload: boolean;
+  storageWarning?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -175,7 +186,7 @@ export function ExamCreateForm({ classes, folders, directUpload }: { classes: Cl
 
   return (
     <form action={handleSubmit} className="space-y-6">
-      {!directUpload && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên tạo đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
+      {storageWarning && <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">Chưa cấu hình Google Cloud Storage. Không nên tạo đề trên môi trường production cho tới khi storage được cấu hình đầy đủ.</p>}
       <fieldset disabled={pending} className="space-y-6 disabled:opacity-70">
         <section className="grid gap-4 rounded-3xl border border-navy-100 bg-white p-5 sm:grid-cols-2">
           <label className="text-sm font-medium text-navy-500 sm:col-span-2">Tên đề<input name="title" required minLength={3} maxLength={150} className={inputClass} placeholder="Ví dụ: Đề thi tốt nghiệp THPT 2026 — mã 0102" /></label>
@@ -195,7 +206,7 @@ export function ExamCreateForm({ classes, folders, directUpload }: { classes: Cl
           {!isForever && <><label className="text-sm font-medium text-navy-500">Mở từ<input name="availableFrom" required type="datetime-local" className={inputClass} /></label><label className="text-sm font-medium text-navy-500">Đóng lúc<input name="availableTo" required type="datetime-local" className={inputClass} /></label></>}
           <div className="grid gap-3 text-sm text-navy-500 sm:col-span-2 sm:grid-cols-3"><label className="flex gap-2"><input name="allowDownload" type="checkbox" /> Cho phép tải PDF</label><label className="flex gap-2"><input name="showAnswer" type="checkbox" /> Hiện lời giải sau khi nộp</label><label className="flex gap-2"><input name="hideWrongAnswers" type="checkbox" /> Ẩn đáp án đúng nếu làm sai</label></div>
           <label className="flex items-center gap-2 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-800 sm:col-span-2"><input name="publishNow" type="checkbox" defaultChecked /> Xuất bản ngay sau khi tạo (bỏ chọn để lưu nháp)</label>
-          <div className="sm:col-span-2"><p className="text-sm font-medium text-navy-500">Giao cho lớp</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{classes.map((item) => <label key={item.id} className="flex gap-2 rounded-xl border border-navy-100 p-3 text-sm text-navy-500"><input name="classIds" value={item.id} type="checkbox" />{item.code} · {item.name} · {item.level === "ADVANCED" ? "Nâng cao" : "Cơ bản"}</label>)}</div>{classes.length === 0 && <p className="mt-2 text-sm text-amber-700">Chưa có lớp đang hoạt động. Hãy tạo lớp trước.</p>}</div>
+          <ClassMultiSelect classes={classes} className="sm:col-span-2" />
         </section>
 
         <section className="space-y-4 rounded-3xl border border-navy-100 bg-white p-5">

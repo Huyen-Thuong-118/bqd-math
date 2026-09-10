@@ -33,22 +33,23 @@ export function DayScheduleCard({
       viewport={{ once: true, amount: 0.3 }}
       transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.08 }}
       className={cn(
-        "group relative overflow-hidden rounded-[2rem] p-5 backdrop-blur-xl transition-all duration-300 sm:p-6",
+        "schedule-day-card group relative overflow-hidden rounded-[2rem] p-5 backdrop-blur-xl transition-all duration-300 sm:p-6",
         hasSessions
           ? "border border-white/40 bg-pastel-100/60 shadow-[0_8px_32px_rgba(27,42,74,0.12)] hover:-translate-y-1.5 hover:shadow-[0_18px_44px_rgba(27,42,74,0.22)]"
           : "border border-dashed border-navy-200/50 bg-pastel-50/40 shadow-none",
       )}
+      data-has-sessions={hasSessions}
     >
       {/* Vệt sáng góc trên phải, đậm dần khi hover — hiệu ứng "glow".
           Ngày trống không có: card phải trông "im lìm" hơn ngày có lớp. */}
       {hasSessions && (
-        <div className="pointer-events-none absolute -top-10 -right-10 size-32 rounded-full bg-gradient-to-br from-pastel-400/40 to-navy-200/40 opacity-60 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
+        <div className="schedule-day-glow pointer-events-none absolute -top-10 -right-10 size-32 rounded-full bg-gradient-to-br from-pastel-400/40 to-navy-200/40 opacity-60 blur-2xl transition-opacity duration-300 group-hover:opacity-100" />
       )}
 
       <div className="relative flex items-center gap-3">
         <span
           className={cn(
-            "flex size-12 shrink-0 items-center justify-center rounded-2xl border shadow-sm",
+            "schedule-day-icon flex size-12 shrink-0 items-center justify-center rounded-2xl border shadow-sm",
             hasSessions
               ? "border-white/60 bg-white/60 text-navy-500"
               : "border-navy-100/60 bg-white/40 text-navy-300",
@@ -80,7 +81,7 @@ export function DayScheduleCard({
           {day.sessions.map((session) => (
             <li
               key={session.id}
-              className="rounded-2xl border border-white/50 bg-white/45 p-3.5 transition-colors group-hover:bg-white/65"
+              className="schedule-session-card rounded-2xl border border-white/50 bg-white/45 p-3.5 transition-colors group-hover:bg-white/65"
             >
               <div className="flex items-center gap-2 text-base font-medium text-navy-500">
                 <Clock className="size-4 shrink-0 text-navy-300" aria-hidden />
@@ -94,22 +95,22 @@ export function DayScheduleCard({
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 <span
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium",
+                    "schedule-level-badge rounded-full px-2.5 py-1 text-xs font-medium",
                     session.level === "ADVANCED"
-                      ? "bg-navy-500 text-pastel-50"
-                      : "bg-pastel-200 text-navy-500",
+                      ? "schedule-level-advanced bg-navy-500 text-pastel-50"
+                      : "schedule-level-basic bg-pastel-200 text-navy-500",
                   )}
                 >
                   {LEVEL_LABEL[session.level]}
                 </span>
-                {session.mode && <span className="inline-flex items-center gap-1 rounded-full border border-navy-100 px-2.5 py-1 text-xs text-navy-400">{session.mode === "Online" ? <Video className="size-3.5" aria-hidden /> : <MapPin className="size-3.5" aria-hidden />}{session.mode}</span>}
-                {session.status === "ARCHIVED" && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">Đã lưu trữ</span>}
+                {session.mode && <span className="schedule-mode-badge inline-flex items-center gap-1 rounded-full border border-navy-100 px-2.5 py-1 text-xs text-navy-400">{session.mode === "Online" ? <Video className="size-3.5" aria-hidden /> : <MapPin className="size-3.5" aria-hidden />}{session.mode}</span>}
+                {session.status === "ARCHIVED" && <span className="schedule-archived-badge rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">Đã lưu trữ</span>}
               </div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="relative mt-5 rounded-2xl border border-dashed border-navy-200/50 px-3.5 py-6 text-center text-sm text-navy-300">
+        <p className="schedule-empty-state relative mt-5 rounded-2xl border border-dashed border-navy-200/50 px-3.5 py-6 text-center text-sm text-navy-300">
           Chưa có lịch học
         </p>
       )}

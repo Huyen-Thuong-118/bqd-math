@@ -10,6 +10,7 @@ RUNTIME_SA="bqdmath-runtime@${GCP_PROJECT_ID}.iam.gserviceaccount.com"
 SERVICE_NAME="bqdmath-web"
 SCHEDULER_JOB="cleanup-suspended-accounts"
 CORS_FILE=""
+CREATE_PREDEPLOY_BACKUP="${CREATE_PREDEPLOY_BACKUP:-true}"
 
 cleanup() {
   if [[ -n "$CORS_FILE" && -f "$CORS_FILE" ]]; then
@@ -150,7 +151,7 @@ prompt_secret_if_missing resend-api-key "Dán Resend API key"
 prompt_text_if_missing email-from "Email gửi OTP, ví dụ BQD Math <noreply@tenmien.vn>"
 
 prompt_text_if_missing seed-admin-email "Email đăng nhập ADMIN"
-prompt_text_if_missing seed-admin-phone "Số điện thoại ADMIN"
+prompt_text_if_missing seed-admin-phone "Tài khoản hoặc số điện thoại đăng nhập ADMIN"
 
 if ! secret_exists seed-admin-password; then
   ADMIN_PASSWORD=""
@@ -233,7 +234,21 @@ for secret_id in "${BUILD_SECRETS[@]}"; do
     --role="roles/secretmanager.secretAccessor" >/dev/null
 done
 
-section "Chạy database migration"
+if [[ "$CREATE_PREDEPLOY_BACKUP" == "true" ]]; then
+  section "Backup Cloud SQL trước migration"
+  BACKUP_DESCRIPTION="predeploy-$(date -u +%Y%m%dT%H%M%SZ)"
+  gcloud sql backups create \
+    --project="$GCP_PROJECT_ID" \
+    --instance="$SQL_INSTANCE" \
+    --description="$BACKUP_DESCRIPTION"
+  printf 'Backup %s đã hoàn tất; dữ liệu sẵn sàng để khôi phục nếu cần.\n' \
+    "$BACKUP_DESCRIPTION"
+else
+  printf 'Bỏ qua backup trước deploy vì CREATE_PREDEPLOY_BACKUP=%s.\n' \
+    "$CREATE_PREDEPLOY_BACKUP"
+fi
+
+section "Chạy database migration bảo toàn dữ liệu"
 gcloud builds submit \
   --project="$GCP_PROJECT_ID" \
   --config=cloudbuild.migrate.yaml \

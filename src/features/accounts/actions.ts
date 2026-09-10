@@ -1,12 +1,16 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { nextStudentCode } from "@/lib/management-codes";
 import { generateTempPassword, hashPassword } from "@/lib/password";
 
-type ActionResult = { success: true } | { success: false; error: string };
+type ActionResult =
+  | { success: true; studentCode?: string; classIds?: string[] }
+  | { success: false; error: string };
 type ResetPasswordResult =
   | { success: true; temporaryPassword: string }
   | { success: false; error: string };
@@ -32,14 +36,40 @@ async function assertAdmin(): Promise<void> {
 
 const ACCOUNTS_PAGE_PATH = "/admin/hoc-sinh";
 
-export async function approveAccount(userId: string): Promise<ActionResult> {
+async function createClassAnnouncementNotifications(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  classIds: string[],
+) {
+  if (!classIds.length) return;
+  const announcements = await transaction.classAnnouncement.findMany({
+    where: { classId: { in: classIds }, isVisible: true },
+    select: { id: true, classId: true, title: true, content: true, createdAt: true },
+  });
+  if (!announcements.length) return;
+  await transaction.notification.createMany({
+    data: announcements.map((announcement) => ({
+      userId,
+      type: "IN_APP" as const,
+      title: announcement.title,
+      content: announcement.content,
+      href: `/lop-hoc/${announcement.classId}`,
+      classAnnouncementId: announcement.id,
+      sentAt: announcement.createdAt,
+    })),
+    skipDuplicates: true,
+  });
+}
+
+export async function approveAccount(userId: string, classIds: string[] = []): Promise<ActionResult> {
   try {
     await assertAdmin();
+    const normalizedClassIds = [...new Set(classIds.filter((id) => typeof id === "string" && id.length <= 100))];
     // + role: "STUDENT" trong where — chặn luôn trường hợp userId trỏ nhầm
     // (hoặc bị truyền cố ý) sang 1 tài khoản ADMIN khác.
     const account = await db.user.findUnique({
       where: { id: userId },
-      select: { role: true, status: true, studentPhone: true, parentPhone: true },
+      select: { role: true, status: true, studentCode: true, studentPhone: true, parentPhone: true },
     });
     if (
       account?.role !== "STUDENT" ||
@@ -53,15 +83,80 @@ export async function approveAccount(userId: string): Promise<ActionResult> {
       };
     }
 
-    await db.user.update({
-      where: { id: userId, role: "STUDENT", status: "PENDING" },
-      data: { status: "ACTIVE" },
+    const validClassCount = await db.class.count({
+      where: { id: { in: normalizedClassIds }, status: "ACTIVE" },
+    });
+    if (validClassCount !== normalizedClassIds.length) {
+      return { success: false, error: "Có lớp không tồn tại hoặc đã được lưu trữ." };
+    }
+
+    const studentCode = await db.$transaction(async (transaction) => {
+      const code = account.studentCode ?? await nextStudentCode(transaction);
+      await transaction.user.update({
+        where: { id: userId, role: "STUDENT", status: "PENDING" },
+        data: { status: "ACTIVE", studentCode: code },
+      });
+
+      if (normalizedClassIds.length) {
+        await transaction.classEnrollment.createMany({
+          data: normalizedClassIds.map((classId) => ({ classId, studentId: userId })),
+          skipDuplicates: true,
+        });
+
+        await createClassAnnouncementNotifications(transaction, userId, normalizedClassIds);
+      }
+      return code;
     });
     revalidatePath(ACCOUNTS_PAGE_PATH);
-    return { success: true };
+    revalidatePath("/admin/lop-hoc");
+    revalidatePath("/lop-hoc");
+    return { success: true, studentCode, classIds: normalizedClassIds };
   } catch (error) {
     console.error("approveAccount thất bại:", error);
     return { success: false, error: "Không thể duyệt tài khoản, vui lòng thử lại." };
+  }
+}
+
+export async function setStudentClasses(userId: string, classIds: string[]): Promise<ActionResult> {
+  try {
+    await assertAdmin();
+    const normalizedClassIds = [...new Set(classIds.filter((id) => typeof id === "string" && id.length <= 100))];
+    const [student, validClassCount] = await Promise.all([
+      db.user.findFirst({
+        where: { id: userId, role: "STUDENT", status: "ACTIVE" },
+        select: { id: true, classEnrollments: { select: { classId: true } } },
+      }),
+      db.class.count({ where: { id: { in: normalizedClassIds }, status: "ACTIVE" } }),
+    ]);
+    if (!student) return { success: false, error: "Không tìm thấy học sinh đang hoạt động." };
+    if (validClassCount !== normalizedClassIds.length) {
+      return { success: false, error: "Có lớp không tồn tại hoặc đã được lưu trữ." };
+    }
+
+    const currentIds = new Set(student.classEnrollments.map((enrollment) => enrollment.classId));
+    const addedClassIds = normalizedClassIds.filter((classId) => !currentIds.has(classId));
+    await db.$transaction(async (transaction) => {
+      await transaction.classEnrollment.deleteMany({
+        where: { studentId: userId, classId: { notIn: normalizedClassIds } },
+      });
+      if (normalizedClassIds.length) {
+        await transaction.classEnrollment.createMany({
+          data: normalizedClassIds.map((classId) => ({ classId, studentId: userId })),
+          skipDuplicates: true,
+        });
+      }
+      await createClassAnnouncementNotifications(transaction, userId, addedClassIds);
+    });
+
+    revalidatePath(ACCOUNTS_PAGE_PATH);
+    revalidatePath("/admin/lop-hoc");
+    revalidatePath("/lop-hoc");
+    revalidatePath("/theo-doi-hoc-tap");
+    revalidatePath("/thong-bao");
+    return { success: true, classIds: normalizedClassIds };
+  } catch (error) {
+    console.error("setStudentClasses thất bại:", error);
+    return { success: false, error: "Không thể cập nhật lớp học cho học sinh." };
   }
 }
 

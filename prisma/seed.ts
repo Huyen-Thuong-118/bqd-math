@@ -7,6 +7,7 @@
 import "dotenv/config";
 
 import { db } from "../src/lib/db";
+import { nextClassCode, nextStudentCode } from "../src/lib/management-codes";
 import { hashPassword } from "../src/lib/password";
 
 const DEMO_CLASS_ID = "slice1-demo-class";
@@ -81,6 +82,10 @@ async function seedSliceOneDemo() {
   const email = process.env.SEED_STUDENT_EMAIL ?? "student@bqdmath.local";
   const password = process.env.SEED_STUDENT_PASSWORD ?? "BqdMathStudent123!";
   const passwordHash = await hashPassword(password);
+  const existingStudent = await db.user.findUnique({ where: { email }, select: { studentCode: true } });
+  const studentCode = existingStudent?.studentCode && /^\d+$/.test(existingStudent.studentCode)
+    ? existingStudent.studentCode
+    : await db.$transaction((transaction) => nextStudentCode(transaction));
   const student = await db.user.upsert({
     where: { email },
     update: {
@@ -88,7 +93,7 @@ async function seedSliceOneDemo() {
       status: "ACTIVE",
       passwordHash,
       mustChangePassword: false,
-      studentCode: "HS-DEMO0001",
+      studentCode,
       studentPhone: "0911111111",
       parentPhone: "0922222222",
     },
@@ -97,20 +102,24 @@ async function seedSliceOneDemo() {
       email,
       role: "STUDENT",
       status: "ACTIVE",
-      studentCode: "HS-DEMO0001",
+      studentCode,
       passwordHash,
       studentPhone: "0911111111",
       parentPhone: "0922222222",
     },
   });
 
+  const existingClass = await db.class.findUnique({ where: { id: DEMO_CLASS_ID }, select: { code: true } });
+  const classCode = existingClass?.code && /^\d+$/.test(existingClass.code)
+    ? existingClass.code
+    : await db.$transaction((transaction) => nextClassCode(transaction));
   await db.class.upsert({
     where: { id: DEMO_CLASS_ID },
     update: {},
     create: {
       id: DEMO_CLASS_ID,
       name: "Lớp Demo Lát cắt 1",
-      code: "DEMO-SLICE-1",
+      code: classCode,
       level: "BASIC",
       schedule: "Thứ 7, 08:00–10:00",
       description: "Lớp dữ liệu mẫu để kiểm thử luồng giao đề và chấm điểm.",

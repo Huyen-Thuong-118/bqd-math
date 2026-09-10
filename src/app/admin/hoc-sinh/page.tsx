@@ -29,21 +29,38 @@ export default async function AdminStudentsPage() {
   // Client Component, tức là đẩy hash mật khẩu ra tới trình duyệt dù chỉ để
   // hiển thị bảng, không phải lỗi nghiêm trọng ngay lập tức (vẫn là hash 1
   // chiều) nhưng không có lý do gì phải chấp nhận rủi ro đó.
-  const accounts = await db.user.findMany({
-    where: { role: "STUDENT" },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      studentCode: true,
-      studentPhone: true,
-      parentPhone: true,
-      status: true,
-      createdAt: true,
-      suspendedAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [accounts, classes] = await Promise.all([
+    db.user.findMany({
+      where: { role: "STUDENT" },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        studentCode: true,
+        studentPhone: true,
+        parentPhone: true,
+        status: true,
+        createdAt: true,
+        suspendedAt: true,
+        classEnrollments: {
+          select: { classId: true, class: { select: { name: true } } },
+          orderBy: { enrolledAt: "asc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.class.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true, code: true, level: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
-  return <AccountsPage initialAccounts={accounts} />;
+  const accountRows = accounts.map(({ classEnrollments, ...account }) => ({
+    ...account,
+    classIds: classEnrollments.map((enrollment) => enrollment.classId),
+    classNames: classEnrollments.map((enrollment) => enrollment.class.name),
+  }));
+
+  return <AccountsPage initialAccounts={accountRows} classes={classes} />;
 }

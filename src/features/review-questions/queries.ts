@@ -24,6 +24,8 @@ const questionListSelect = {
   difficulty: true,
   textSolution: true,
   solutionImageUrl: true,
+  questionImageKeys: true,
+  solutionImageKeys: true,
   videoUid: true,
   showSolution: true,
   classLinks: {
@@ -40,6 +42,7 @@ function questionWhere(
     OR: [
       { textSolution: { not: null } },
       { solutionImageUrl: { not: null } },
+      { solutionImageKeys: { not: [] } },
       { videoUid: { not: null } },
       { videoUrl: { not: null } },
     ],
@@ -85,6 +88,14 @@ function mapAdminQuestion(item: Prisma.ReviewQuestionGetPayload<{ select: typeof
     options: Array.isArray(item.options)
       ? item.options.filter((option): option is string => typeof option === "string")
       : [],
+    questionImageUrls: Array.isArray(item.questionImageKeys)
+      ? item.questionImageKeys.flatMap((key, index) => typeof key === "string" ? [`/api/review-questions/${item.id}/assets/question/${index}`] : [])
+      : [],
+    solutionImageUrls: Array.isArray(item.solutionImageKeys)
+      ? item.solutionImageKeys.flatMap((key, index) => typeof key === "string" ? [`/api/review-questions/${item.id}/assets/solution/${index}`] : [])
+      : [],
+    questionImageKeys: undefined,
+    solutionImageKeys: undefined,
     classIds: item.classLinks.map((link) => link.classId),
     classNames: item.classLinks.map((link) => link.class.name),
     classLinks: undefined,
@@ -105,7 +116,7 @@ export async function getAdminReviewQuestionsPage(filters: ReviewQuestionFilters
     }),
     db.class.findMany({
       where: { status: "ACTIVE" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     }),
     db.reviewQuestion.findMany({
@@ -189,7 +200,7 @@ export async function getReviewQuestionsForCurrentStudent(
   const [questions, total, classes, topicRows, gradeRows] = await Promise.all([
     db.reviewQuestion.findMany({
     where,
-    select: { id: true, content: true, type: true, options: true, grade: true, topic: true, difficulty: true, attempts: { where: { userId: studentId }, select: { isCorrect: true }, orderBy: { attemptedAt: "desc" } } },
+    select: { id: true, content: true, type: true, options: true, questionImageKeys: true, grade: true, topic: true, difficulty: true, attempts: { where: { userId: studentId }, select: { isCorrect: true }, orderBy: { attemptedAt: "desc" } } },
     orderBy: { createdAt: "asc" },
     skip: (filters.page - 1) * REVIEW_QUESTION_PAGE_SIZE,
     take: REVIEW_QUESTION_PAGE_SIZE,
@@ -223,6 +234,10 @@ export async function getReviewQuestionsForCurrentStudent(
       options: Array.isArray(question.options)
         ? question.options.filter((item): item is string => typeof item === "string")
         : [],
+      questionImageUrls: Array.isArray(question.questionImageKeys)
+        ? question.questionImageKeys.flatMap((key, index) => typeof key === "string" ? [`/api/review-questions/${question.id}/assets/question/${index}`] : [])
+        : [],
+      questionImageKeys: undefined,
       attemptCount: question.attempts.length,
       lastCorrect: question.attempts[0]?.isCorrect ?? null,
       attempts: undefined,
